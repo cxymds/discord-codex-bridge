@@ -1,9 +1,23 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { createStore } from "../src/store.js";
+
+const stores: Array<{ close(): void }> = [];
+
+function testStore() {
+  const store = createStore(":memory:");
+  stores.push(store);
+  return store;
+}
+
+afterEach(() => {
+  while (stores.length) {
+    stores.pop()?.close();
+  }
+});
 
 describe("store", () => {
   it("creates and finds sessions by thread and Codex id", () => {
-    const store = createStore(":memory:");
+    const store = testStore();
     const session = store.createSession({
       codexSessionId: "codex-1",
       discordGuildId: "guild",
@@ -17,7 +31,7 @@ describe("store", () => {
   });
 
   it("updates status and records close time", () => {
-    const store = createStore(":memory:");
+    const store = testStore();
     const session = store.createSession({
       codexSessionId: null,
       discordGuildId: "guild",
@@ -34,7 +48,7 @@ describe("store", () => {
   });
 
   it("records events", () => {
-    const store = createStore(":memory:");
+    const store = testStore();
     const event = store.recordEvent({
       sessionId: null,
       source: "system",
