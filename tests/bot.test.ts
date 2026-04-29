@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { createBridgeHandlers } from "../src/bot.js";
+import { createBridgeHandlers, isConfiguredCommandChannel, roleIdsFromInteractionMember } from "../src/bot.js";
 
 describe("createBridgeHandlers", () => {
   it("creates a session and posts the first Codex result", async () => {
@@ -65,5 +65,97 @@ describe("createBridgeHandlers", () => {
     });
 
     await expect(handlers.handleStatusCommand({ userId: "u1", roleIds: [], threadId: "thread1" })).resolves.toContain("codex1");
+  });
+
+  it("marks new sessions as error and reports Codex start failures", async () => {
+    const error = new Error("Codex exploded");
+    const postMessage = vi.fn(async () => undefined);
+    const store = {
+      createSession: vi.fn((input) => ({ id: "bridge1", ...input, status: "active", createdAt: "", updatedAt: "", lastTurnAt: null, closedAt: null })),
+      setCodexSessionId: vi.fn(),
+      updateSessionStatus: vi.fn(),
+      markTurn: vi.fn(),
+      recordEvent: vi.fn()
+    };
+    const handlers = createBridgeHandlers({
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      store: store as never,
+      codex: { start: vi.fn(async () => { throw error; }) } as never,
+      queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
+      discord: { createThread: vi.fn(async () => ({ id: "thread1", name: "Hello" })), postMessage }
+    });
+
+    await expect(handlers.handleNewCommand({ userId: "u1", roleIds: [], prompt: "Hello" })).rejects.toThrow("Codex exploded");
+
+    expect(store.updateSessionStatus).toHaveBeenNthCalledWith(1, "bridge1", "running");
+    expect(store.updateSessionStatus).toHaveBeenNthCalledWith(2, "bridge1", "error");
+    expect(store.recordEvent).toHaveBeenCalledWith({
+      sessionId: "bridge1",
+      source: "system",
+      kind: "error",
+      payload: { message: "Codex exploded" }
+    });
+    expect(postMessage).toHaveBeenCalledWith("thread1", "Codex run failed: Codex exploded");
+  });
+
+  it("marks existing sessions as error and reports Codex resume failures", async () => {
+    const error = new Error("Resume failed");
+    const postMessage = vi.fn(async () => undefined);
+    const store = {
+      findSessionByThreadId: vi.fn(() => ({
+        id: "bridge1",
+        codexSessionId: "codex1",
+        discordGuildId: "guild",
+        discordChannelId: "channel",
+        discordThreadId: "thread1",
+        title: "Hello",
+        status: "active",
+        createdAt: "",
+        updatedAt: "",
+        lastTurnAt: null,
+        closedAt: null
+      })),
+      updateSessionStatus: vi.fn(),
+      markTurn: vi.fn(),
+      recordEvent: vi.fn()
+    };
+    const handlers = createBridgeHandlers({
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      store: store as never,
+      codex: { resume: vi.fn(async () => { throw error; }) } as never,
+      queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
+      discord: { createThread: vi.fn(), postMessage }
+    });
+
+    await expect(handlers.handleThreadMessage({ userId: "u1", roleIds: [], threadId: "thread1", content: "Continue" })).rejects.toThrow("Resume failed");
+
+    expect(store.updateSessionStatus).toHaveBeenNthCalledWith(1, "bridge1", "running");
+    expect(store.updateSessionStatus).toHaveBeenNthCalledWith(2, "bridge1", "error");
+    expect(store.recordEvent).toHaveBeenCalledWith({
+      sessionId: "bridge1",
+      source: "system",
+      kind: "error",
+      payload: { message: "Resume failed" }
+    });
+    expect(postMessage).toHaveBeenCalledWith("thread1", "Codex run failed: Resume failed");
+  });
+});
+
+describe("roleIdsFromInteractionMember", () => {
+  it("extracts role ids from raw API arrays", () => {
+    expect(roleIdsFromInteractionMember({ roles: ["role1", "role2"] })).toEqual(["role1", "role2"]);
+  });
+
+  it("extracts role ids from Discord.js role manager cache shapes", () => {
+    expect(roleIdsFromInteractionMember({ roles: { cache: new Map([["role3", {}], ["role4", {}]]) } })).toEqual(["role3", "role4"]);
+  });
+});
+
+describe("isConfiguredCommandChannel", () => {
+  it("only allows commands in the configured channel", () => {
+    const config = { discordChannelId: "channel" };
+
+    expect(isConfiguredCommandChannel(config, "channel")).toBe(true);
+    expect(isConfiguredCommandChannel(config, "other")).toBe(false);
   });
 });
