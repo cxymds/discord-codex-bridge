@@ -1,5 +1,5 @@
 {
-  "name": "codex-discord-bridge",
+  "name": "discord-codex-bridge",
   "version": "0.1.0",
   "private": true,
   "type": "module",
