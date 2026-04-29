@@ -12,7 +12,12 @@ export class SessionQueue {
         try {
           return await work();
         } finally {
-          this.pendingCounts.set(sessionId, Math.max(0, this.pendingCount(sessionId) - 1));
+          const remaining = Math.max(0, this.pendingCount(sessionId) - 1);
+          if (remaining === 0) {
+            this.pendingCounts.delete(sessionId);
+          } else {
+            this.pendingCounts.set(sessionId, remaining);
+          }
         }
       });
 
@@ -28,5 +33,9 @@ export class SessionQueue {
 
   pendingCount(sessionId: string): number {
     return this.pendingCounts.get(sessionId) ?? 0;
+  }
+
+  trackedSessionCount(): number {
+    return this.pendingCounts.size;
   }
 }

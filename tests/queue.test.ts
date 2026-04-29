@@ -21,4 +21,13 @@ describe("SessionQueue", () => {
     await Promise.all([first, second]);
     expect(order).toEqual(["first-start", "first-end", "second"]);
   });
+
+  it("clears pending-count bookkeeping when queued work drains", async () => {
+    const queue = new SessionQueue();
+
+    await queue.enqueue("s1", async () => "done");
+
+    expect(queue.pendingCount("s1")).toBe(0);
+    expect(queue.trackedSessionCount()).toBe(0);
+  });
 });
