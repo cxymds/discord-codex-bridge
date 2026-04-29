@@ -36,7 +36,28 @@ describe("createCodexClient", () => {
     const result = await client.resume("s1", "continue");
 
     expect(result.finalMessage).toBe("continued");
-    expect(runner).toHaveBeenCalledWith("/codex", expect.arrayContaining(["exec", "resume", "--json", "s1"]), expect.anything());
+    expect(runner).toHaveBeenCalledWith("/codex", ["exec", "resume", "--json", "s1", "continue"], expect.anything());
+  });
+
+  it("ignores generic item ids when finding the session id", async () => {
+    const runner: ProcessRunner = vi.fn(async () => ({
+      code: 0,
+      stdout: [
+        JSON.stringify({
+          type: "item.completed",
+          id: "item_123",
+          item: { type: "agent_message", text: "done" }
+        }),
+        JSON.stringify({ type: "thread.started", thread_id: "thread_abc" })
+      ].join("\n"),
+      stderr: ""
+    }));
+
+    const client = createCodexClient({ codexBin: "/codex", codexHome: "/home/.codex", cwd: "/work", runner });
+    const result = await client.start("hello");
+
+    expect(result.sessionId).toBe("thread_abc");
+    expect(result.sessionId).not.toBe("item_123");
   });
 
   it("parses the observed Codex JSONL thread and item fields", async () => {

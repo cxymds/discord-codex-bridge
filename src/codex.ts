@@ -42,8 +42,14 @@ function extractSessionId(events: unknown[]): string | null {
   for (const event of events) {
     if (!event || typeof event !== "object") continue;
     const record = event as Record<string, unknown>;
-    for (const key of ["session_id", "sessionId", "thread_id", "conversation_id", "id"]) {
+    for (const key of ["session_id", "sessionId", "thread_id", "threadId", "conversation_id", "conversationId"]) {
       const value = record[key];
+      if (typeof value === "string" && value.length > 0) {
+        return value;
+      }
+    }
+    if (record.type === "thread.started" || record.type === "session.started") {
+      const value = record.id;
       if (typeof value === "string" && value.length > 0) {
         return value;
       }
