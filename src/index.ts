@@ -7,6 +7,7 @@ import { SessionQueue } from "./queue.js";
 import { startNotifyServer } from "./notify.js";
 import { createBridgeHandlers, createDiscordClient, registerCommands } from "./bot.js";
 import { chunkDiscordMessage } from "./format.js";
+import { extractNotifyFields } from "./notifyPayload.js";
 
 const config = loadConfigFromEnv();
 const store = createStore(config.dbPath);
@@ -40,30 +41,6 @@ const discordPort = {
 
 const handlers = createBridgeHandlers({ config, store, codex, queue, discord: discordPort });
 client = createDiscordClient(config, handlers);
-
-function extractNotifyFields(payload: unknown): { codexSessionId: string | null; finalMessage: string | null } {
-  const direct = payload && typeof payload === "object" ? (payload as Record<string, unknown>) : {};
-  let parsedStdin: Record<string, unknown> = {};
-  if (typeof direct.stdin === "string" && direct.stdin.trim().startsWith("{")) {
-    try {
-      parsedStdin = JSON.parse(direct.stdin) as Record<string, unknown>;
-    } catch {
-      parsedStdin = {};
-    }
-  }
-  const merged = { ...direct, ...parsedStdin };
-  const codexSessionId = typeof merged.session_id === "string"
-    ? merged.session_id
-    : typeof merged.sessionId === "string"
-      ? merged.sessionId
-      : null;
-  const finalMessage = typeof merged.final_message === "string"
-    ? merged.final_message
-    : typeof merged.message === "string"
-      ? merged.message
-      : null;
-  return { codexSessionId, finalMessage };
-}
 
 const notifyServer = await startNotifyServer({
   host: config.notifyHost,
