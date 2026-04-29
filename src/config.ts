@@ -12,7 +12,7 @@ const envSchema = z.object({
   BRIDGE_DB_PATH: z.string().default("./data/bridge.sqlite"),
   BRIDGE_NOTIFY_HOST: z.string().default("127.0.0.1"),
   BRIDGE_NOTIFY_PORT: z.coerce.number().int().positive().default(43765),
-  BRIDGE_PUBLIC_BASE_URL: z.string().default("http://127.0.0.1:43765")
+  BRIDGE_PUBLIC_BASE_URL: z.string().optional()
 });
 
 export interface BridgeConfig {
@@ -58,6 +58,6 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): BridgeC
     dbPath: parsed.BRIDGE_DB_PATH,
     notifyHost: parsed.BRIDGE_NOTIFY_HOST,
     notifyPort: parsed.BRIDGE_NOTIFY_PORT,
-    publicBaseUrl: parsed.BRIDGE_PUBLIC_BASE_URL
+    publicBaseUrl: parsed.BRIDGE_PUBLIC_BASE_URL ?? `http://${parsed.BRIDGE_NOTIFY_HOST}:${parsed.BRIDGE_NOTIFY_PORT}`
   };
 }

@@ -23,6 +23,16 @@ describe("loadConfigFromEnv", () => {
     expect(config.notifyPort).toBe(43765);
   });
 
+  it("derives the public base URL from notify host and port when omitted", () => {
+    const config = loadConfigFromEnv({
+      ...validEnv,
+      BRIDGE_NOTIFY_HOST: "0.0.0.0",
+      BRIDGE_NOTIFY_PORT: "5000"
+    });
+
+    expect(config.publicBaseUrl).toBe("http://0.0.0.0:5000");
+  });
+
   it("requires at least one allowed user or role", () => {
     expect(() =>
       loadConfigFromEnv({
