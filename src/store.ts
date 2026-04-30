@@ -128,6 +128,12 @@ export function createStore(dbPath: string) {
       return toSession(db.prepare("SELECT * FROM sessions WHERE codex_session_id = ?").get(codexSessionId) as Record<string, unknown> | undefined);
     },
 
+    listMappedSessions(): BridgeSession[] {
+      return (db.prepare("SELECT * FROM sessions WHERE codex_session_id IS NOT NULL AND status != 'closed'").all() as Array<Record<string, unknown>>).map(
+        (row) => toSession(row)!
+      );
+    },
+
     findUnmappedSessionByTitle(title: string): BridgeSession | null {
       return toSession(
         db.prepare("SELECT * FROM sessions WHERE codex_session_id IS NULL AND title = ? ORDER BY created_at DESC LIMIT 1").get(title) as
@@ -160,6 +166,10 @@ export function createStore(dbPath: string) {
         nowIso()
       );
       return toEvent(db.prepare("SELECT * FROM events WHERE id = ?").get(result.lastInsertRowid) as Record<string, unknown>);
+    },
+
+    listEventsBySessionId(sessionId: string): BridgeEvent[] {
+      return (db.prepare("SELECT * FROM events WHERE session_id = ? ORDER BY id ASC").all(sessionId) as Array<Record<string, unknown>>).map(toEvent);
     },
 
     close(): void {

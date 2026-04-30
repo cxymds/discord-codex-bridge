@@ -80,4 +80,20 @@ describe("store", () => {
     expect(event.id).toBeGreaterThan(0);
     expect(event.payload).toEqual({ message: "unknown session" });
   });
+
+  it("lists mapped sessions and session events", () => {
+    const store = testStore();
+    const session = store.createSession({
+      codexSessionId: "codex-1",
+      discordGuildId: "guild",
+      discordChannelId: "channel",
+      discordThreadId: "thread",
+      projectPath: null,
+      title: "Test session"
+    });
+    store.recordEvent({ sessionId: session.id, source: "discord", kind: "message", payload: { content: "hello" } });
+
+    expect(store.listMappedSessions().map((item) => item.id)).toEqual([session.id]);
+    expect(store.listEventsBySessionId(session.id).map((event) => event.payload)).toEqual([{ content: "hello" }]);
+  });
 });

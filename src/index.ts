@@ -17,6 +17,7 @@ import {
   findCodexSessionIndexEntry,
   syncCodexSessionToDiscord
 } from "./sessionSync.js";
+import { createCodexTranscriptPoller } from "./transcriptSync.js";
 
 async function configureDiscordProxy(config: BridgeConfig) {
   if (!config.discordProxyUrl) {
@@ -84,6 +85,11 @@ const sessionIndexPoller = createCodexSessionIndexPoller({
   store,
   discord: discordPort
 });
+const transcriptPoller = createCodexTranscriptPoller({
+  codexHome: config.codexHome,
+  store,
+  discord: discordPort
+});
 
 const notifyServer = await startNotifyServer({
   host: config.notifyHost,
@@ -117,11 +123,13 @@ const notifyServer = await startNotifyServer({
 await registerCommands(config);
 await client.login(config.discordToken);
 sessionIndexPoller.start();
+transcriptPoller.start();
 
 console.log(`Discord-Codex bridge running. Notify endpoint: ${notifyServer.url}/notify/turn-ended`);
 
 async function shutdown() {
   sessionIndexPoller.stop();
+  transcriptPoller.stop();
   await notifyServer.close();
   client.destroy();
   store.close();
