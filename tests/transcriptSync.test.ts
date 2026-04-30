@@ -2,10 +2,10 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
-import { createCodexTranscriptPoller, readCodexTranscriptMessages, syncCodexTranscriptSession } from "../src/transcriptSync.js";
+import { createCodexTranscriptPoller, readCodexFinalMessages, syncCodexTranscriptSession } from "../src/transcriptSync.js";
 
-describe("readCodexTranscriptMessages", () => {
-  it("extracts Codex user and assistant messages from session jsonl", () => {
+describe("readCodexFinalMessages", () => {
+  it("extracts only final assistant messages from session jsonl", () => {
     const dir = join(tmpdir(), `discord-codex-bridge-transcript-${Date.now()}`);
     mkdirSync(dir, { recursive: true });
     const sessionPath = join(dir, "rollout.jsonl");
@@ -14,19 +14,17 @@ describe("readCodexTranscriptMessages", () => {
       [
         JSON.stringify({ type: "session_meta", payload: { id: "codex1", cwd: "/work" } }),
         JSON.stringify({ type: "event_msg", payload: { type: "user_message", message: "from Codex UI" } }),
-        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "from assistant", phase: "final_answer" } })
+        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "progress" } }),
+        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "final answer", phase: "final_answer" } })
       ].join("\n")
     );
 
-    expect(readCodexTranscriptMessages(sessionPath)).toEqual([
-      { key: "2", role: "user", content: "from Codex UI" },
-      { key: "3", role: "assistant", content: "from assistant" }
-    ]);
+    expect(readCodexFinalMessages(sessionPath)).toEqual([{ key: "4", content: "final answer" }]);
   });
 });
 
 describe("syncCodexTranscriptSession", () => {
-  it("posts new Codex transcript messages to the mapped Discord thread", async () => {
+  it("posts new final Codex messages to the mapped Discord thread", async () => {
     const dir = join(tmpdir(), `discord-codex-bridge-transcript-sync-${Date.now()}`);
     mkdirSync(dir, { recursive: true });
     const sessionPath = join(dir, "rollout.jsonl");
@@ -34,7 +32,8 @@ describe("syncCodexTranscriptSession", () => {
       sessionPath,
       [
         JSON.stringify({ type: "event_msg", payload: { type: "user_message", message: "desktop question" } }),
-        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "desktop answer" } })
+        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "progress" } }),
+        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "desktop answer", phase: "final_answer" } })
       ].join("\n")
     );
     const store = {
@@ -54,13 +53,13 @@ describe("syncCodexTranscriptSession", () => {
       discord: { postMessage }
     });
 
-    expect(postMessage).toHaveBeenNthCalledWith(1, "thread1", "Codex user: desktop question");
-    expect(postMessage).toHaveBeenNthCalledWith(2, "thread1", "desktop answer");
+    expect(postMessage).toHaveBeenCalledTimes(1);
+    expect(postMessage).toHaveBeenCalledWith("thread1", "desktop answer");
     expect(store.recordEvent).toHaveBeenCalledWith({
       sessionId: "bridge1",
       source: "codex",
       kind: "message",
-      payload: { transcriptKey: "1", role: "user", content: "desktop question" }
+      payload: { transcriptKey: "3", content: "desktop answer" }
     });
   });
 
@@ -72,8 +71,8 @@ describe("syncCodexTranscriptSession", () => {
       sessionPath,
       [
         JSON.stringify({ type: "event_msg", payload: { type: "user_message", message: "from Discord" } }),
-        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "already posted" } }),
-        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "new assistant message" } })
+        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "already posted", phase: "final_answer" } }),
+        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "new assistant message", phase: "final_answer" } })
       ].join("\n")
     );
     const store = {
@@ -106,7 +105,7 @@ describe("createCodexTranscriptPoller", () => {
     const dir = join(tmpdir(), `discord-codex-bridge-transcript-poller-${Date.now()}`);
     mkdirSync(dir, { recursive: true });
     const sessionPath = join(dir, "rollout.jsonl");
-    writeFileSync(sessionPath, JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "old answer" } }));
+    writeFileSync(sessionPath, JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "old answer", phase: "final_answer" } }));
     const events: Array<{ source: "codex"; kind: "message"; payload: unknown }> = [];
     const store = {
       listMappedSessions: vi.fn(() => [{ id: "bridge1", codexSessionId: "codex1", discordThreadId: "thread1" }]),
@@ -127,8 +126,8 @@ describe("createCodexTranscriptPoller", () => {
     writeFileSync(
       sessionPath,
       [
-        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "old answer" } }),
-        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "new answer" } })
+        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "old answer", phase: "final_answer" } }),
+        JSON.stringify({ type: "event_msg", payload: { type: "agent_message", message: "new answer", phase: "final_answer" } })
       ].join("\n")
     );
     await poller.scanNow();

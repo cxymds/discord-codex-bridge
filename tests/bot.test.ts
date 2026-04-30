@@ -48,6 +48,7 @@ describe("createBridgeHandlers", () => {
         discordGuildId: "guild",
         discordChannelId: "channel",
         discordThreadId: "thread1",
+        projectPath: "/Users/cxymds/Documents/KAI/rustfs",
         title: "Hello",
         status: "active",
         createdAt: "2026-04-29T00:00:00.000Z",
@@ -122,7 +123,7 @@ describe("createBridgeHandlers", () => {
     const handlers = createBridgeHandlers({
       config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
       store: store as never,
-      codex: { resume: vi.fn(async () => { throw error; }) } as never,
+      codex: { resumeInProject: vi.fn(async () => { throw error; }) } as never,
       queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
       discord: { createThread: vi.fn(), postMessage }
     });
@@ -138,6 +139,42 @@ describe("createBridgeHandlers", () => {
       payload: { message: "Resume failed" }
     });
     expect(postMessage).toHaveBeenCalledWith("thread1", "Codex run failed: Resume failed");
+  });
+
+  it("resumes Discord follow-up messages in the session project", async () => {
+    const postMessage = vi.fn(async () => undefined);
+    const store = {
+      findSessionByThreadId: vi.fn(() => ({
+        id: "bridge1",
+        codexSessionId: "codex1",
+        discordGuildId: "guild",
+        discordChannelId: "channel",
+        discordThreadId: "thread1",
+        projectPath: "/Users/cxymds/Documents/KAI/rustfs",
+        title: "Hello",
+        status: "active",
+        createdAt: "",
+        updatedAt: "",
+        lastTurnAt: null,
+        closedAt: null
+      })),
+      updateSessionStatus: vi.fn(),
+      markTurn: vi.fn(),
+      recordEvent: vi.fn()
+    };
+    const codex = { resumeInProject: vi.fn(async () => ({ sessionId: "codex1", finalMessage: "continued", rawEvents: [] })) };
+    const handlers = createBridgeHandlers({
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      store: store as never,
+      codex: codex as never,
+      queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
+      discord: { createThread: vi.fn(), postMessage }
+    });
+
+    await handlers.handleThreadMessage({ userId: "u1", roleIds: [], threadId: "thread1", content: "Continue" });
+
+    expect(codex.resumeInProject).toHaveBeenCalledWith("/Users/cxymds/Documents/KAI/rustfs", "codex1", "Continue");
+    expect(postMessage).toHaveBeenCalledWith("thread1", "continued");
   });
 });
 

@@ -99,6 +99,10 @@ export function createCodexClient(options: CodexClientOptions) {
       return run(["exec", "resume", "--json", sessionId, prompt]);
     },
 
+    resumeInProject(projectPath: string, sessionId: string, prompt: string): Promise<CodexRunResult> {
+      return run(["exec", "resume", "--json", sessionId, prompt], projectPath);
+    },
+
     summarize(sessionId: string): Promise<CodexRunResult> {
       return run([
         "exec",

@@ -108,7 +108,8 @@ export function createBridgeHandlers(deps: HandlerDeps) {
       await deps.queue.enqueue(session.id, async () => {
         deps.store.updateSessionStatus(session.id, "running");
         try {
-          const result = await deps.codex.resume(session.codexSessionId!, input.content);
+          const projectPath = session.projectPath ?? process.cwd();
+          const result = await deps.codex.resumeInProject(projectPath, session.codexSessionId!, input.content);
           deps.store.markTurn(session.id);
           deps.store.updateSessionStatus(session.id, "active");
           deps.store.recordEvent({ sessionId: session.id, source: "codex", kind: "turn_result", payload: result });

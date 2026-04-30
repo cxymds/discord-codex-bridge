@@ -6,7 +6,6 @@ import type { createStore } from "./store.js";
 
 export interface TranscriptMessage {
   key: string;
-  role: "user" | "assistant";
   content: string;
 }
 
@@ -32,7 +31,7 @@ function textPayload(value: unknown): string | null {
   return null;
 }
 
-export function readCodexTranscriptMessages(sessionPath: string | null): TranscriptMessage[] {
+export function readCodexFinalMessages(sessionPath: string | null): TranscriptMessage[] {
   if (!sessionPath || !existsSync(sessionPath)) {
     return [];
   }
@@ -46,13 +45,9 @@ export function readCodexTranscriptMessages(sessionPath: string | null): Transcr
       }
 
       const payload = event.payload as Record<string, unknown>;
-      if (payload.type === "user_message") {
+      if (payload.type === "agent_message" && payload.phase === "final_answer") {
         const content = textPayload(payload.message);
-        return content ? [{ key: String(index + 1), role: "user", content }] : [];
-      }
-      if (payload.type === "agent_message") {
-        const content = textPayload(payload.message);
-        return content ? [{ key: String(index + 1), role: "assistant", content }] : [];
+        return content ? [{ key: String(index + 1), content }] : [];
       }
       return [];
     });
@@ -101,12 +96,12 @@ export async function syncCodexTranscriptSession(options: {
   const skipped = skippedContents(events);
   const posted = postedTranscriptKeys(events);
 
-  for (const message of readCodexTranscriptMessages(options.sessionPath)) {
+  for (const message of readCodexFinalMessages(options.sessionPath)) {
     if (posted.has(message.key) || skipped.has(message.content)) {
       continue;
     }
 
-    const content = message.role === "user" ? `Codex user: ${message.content}` : message.content;
+    const content = message.content;
     for (const chunk of chunkDiscordMessage(content)) {
       await options.discord.postMessage(options.session.discordThreadId, chunk);
     }
@@ -114,7 +109,7 @@ export async function syncCodexTranscriptSession(options: {
       sessionId: options.session.id,
       source: "codex",
       kind: "message",
-      payload: { transcriptKey: message.key, role: message.role, content: message.content }
+      payload: { transcriptKey: message.key, content: message.content }
     });
   }
 }
@@ -154,12 +149,12 @@ export function createCodexTranscriptPoller(options: {
       for (const session of options.store.listMappedSessions()) {
         if (!session.codexSessionId || baselinedSessions.has(session.id)) continue;
         const sessionPath = (options.findSessionPath ?? findCodexSessionPath)(options.codexHome, session.codexSessionId);
-        for (const message of readCodexTranscriptMessages(sessionPath)) {
+        for (const message of readCodexFinalMessages(sessionPath)) {
           options.store.recordEvent({
             sessionId: session.id,
             source: "codex",
             kind: "message",
-            payload: { transcriptKey: message.key, role: message.role, content: message.content, baseline: true }
+            payload: { transcriptKey: message.key, content: message.content, baseline: true }
           });
         }
         baselinedSessions.add(session.id);

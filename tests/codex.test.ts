@@ -56,6 +56,23 @@ describe("createCodexClient", () => {
     expect(runner).toHaveBeenCalledWith("/codex", ["exec", "resume", "--json", "s1", "continue"], expect.anything());
   });
 
+  it("can resume a session in its project directory", async () => {
+    const runner: ProcessRunner = vi.fn(async () => ({
+      code: 0,
+      stdout: JSON.stringify({ type: "message", content: "continued" }),
+      stderr: ""
+    }));
+
+    const client = createCodexClient({ codexBin: "/codex", codexHome: "/home/.codex", cwd: "/bridge", runner });
+    await client.resumeInProject("/Users/cxymds/Documents/KAI/rustfs", "s1", "continue");
+
+    expect(runner).toHaveBeenCalledWith(
+      "/codex",
+      ["exec", "resume", "--json", "s1", "continue"],
+      expect.objectContaining({ cwd: "/Users/cxymds/Documents/KAI/rustfs" })
+    );
+  });
+
   it("ignores generic item ids when finding the session id", async () => {
     const runner: ProcessRunner = vi.fn(async () => ({
       code: 0,
