@@ -6,6 +6,8 @@ import { ProxyAgent, setGlobalDispatcher } from "undici";
 import { loadConfigFromEnv, type BridgeConfig } from "./config.js";
 import { createStore } from "./store.js";
 import { createCodexClient } from "./codex.js";
+import { createAppServerCodexClient, defaultAppServerSocketPath } from "./appServer.js";
+import { createTurnDeliveryClient } from "./turnDelivery.js";
 import { SessionQueue } from "./queue.js";
 import { startNotifyServer } from "./notify.js";
 import { chunkDiscordMessage } from "./format.js";
@@ -51,6 +53,22 @@ const codex = createCodexClient({
   codexHome: config.codexHome,
   cwd: process.cwd()
 });
+const desktopCodex = createAppServerCodexClient({
+  codexBin: config.codexBin,
+  codexHome: config.codexHome,
+  socketPath: config.codexAppServerSocket ?? defaultAppServerSocketPath(config.codexHome),
+  cwd: process.cwd()
+});
+const turnDelivery = createTurnDeliveryClient({
+  mode: config.codexTurnDelivery,
+  cli: codex,
+  desktop: desktopCodex,
+  onDesktopFailure: (error) => {
+    const message = error instanceof Error ? error.message : String(error);
+    console.warn(`Desktop turn delivery failed; falling back to Codex CLI resume. ${message}`);
+  }
+});
+const handlerCodex = { ...codex, resume: turnDelivery.resume, resumeInProject: turnDelivery.resumeInProject };
 const queue = new SessionQueue();
 const sessionIndexPath = codexSessionIndexPath(config.codexHome);
 
@@ -75,7 +93,7 @@ const discordPort = {
   }
 };
 
-const handlers = createBridgeHandlers({ config, store, codex, queue, discord: discordPort });
+const handlers = createBridgeHandlers({ config, store, codex: handlerCodex, queue, discord: discordPort });
 client = createDiscordClient(config, handlers);
 const sessionIndexPoller = createCodexSessionIndexPoller({
   indexPath: sessionIndexPath,

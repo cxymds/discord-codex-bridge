@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
-import { buildSlashCommands, createBridgeHandlers, isConfiguredCommandChannel, roleIdsFromInteractionMember } from "../src/bot.js";
+import { ChannelType } from "discord.js";
+import { buildSlashCommands, createBridgeHandlers, isConfiguredCommandChannel, isSupportedThreadChannelType, roleIdsFromInteractionMember } from "../src/bot.js";
 
 describe("createBridgeHandlers", () => {
   it("creates a session and posts the first Codex result", async () => {
@@ -335,6 +336,15 @@ describe("isConfiguredCommandChannel", () => {
 
     expect(isConfiguredCommandChannel(config, "channel")).toBe(true);
     expect(isConfiguredCommandChannel(config, "other")).toBe(false);
+  });
+});
+
+describe("isSupportedThreadChannelType", () => {
+  it("accepts public, private, and announcement threads", () => {
+    expect(isSupportedThreadChannelType(ChannelType.PublicThread)).toBe(true);
+    expect(isSupportedThreadChannelType(ChannelType.PrivateThread)).toBe(true);
+    expect(isSupportedThreadChannelType(ChannelType.AnnouncementThread)).toBe(true);
+    expect(isSupportedThreadChannelType(ChannelType.GuildText)).toBe(false);
   });
 });
 

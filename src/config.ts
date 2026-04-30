@@ -10,6 +10,8 @@ const envSchema = z.object({
   DISCORD_PROXY_URL: z.string().optional(),
   CODEX_BIN: z.string().default("/Applications/Codex.app/Contents/Resources/codex"),
   CODEX_HOME: z.string().default(`${process.env.HOME ?? ""}/.codex`),
+  CODEX_TURN_DELIVERY: z.enum(["cli", "desktop", "auto"]).default("auto"),
+  CODEX_APP_SERVER_SOCKET: z.string().optional(),
   BRIDGE_WORKSPACE_PATH: z.string().optional(),
   BRIDGE_DB_PATH: z.string().default("./data/bridge.sqlite"),
   BRIDGE_NOTIFY_HOST: z.string().default("127.0.0.1"),
@@ -27,6 +29,8 @@ export interface BridgeConfig {
   discordProxyUrl: string | null;
   codexBin: string;
   codexHome: string;
+  codexTurnDelivery: "cli" | "desktop" | "auto";
+  codexAppServerSocket: string | null;
   workspacePath: string | null;
   dbPath: string;
   notifyHost: string;
@@ -60,6 +64,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): BridgeC
     discordProxyUrl: parsed.DISCORD_PROXY_URL ?? null,
     codexBin: parsed.CODEX_BIN,
     codexHome: parsed.CODEX_HOME,
+    codexTurnDelivery: parsed.CODEX_TURN_DELIVERY,
+    codexAppServerSocket: parsed.CODEX_APP_SERVER_SOCKET ?? null,
     workspacePath: parsed.BRIDGE_WORKSPACE_PATH ?? null,
     dbPath: parsed.BRIDGE_DB_PATH,
     notifyHost: parsed.BRIDGE_NOTIFY_HOST,

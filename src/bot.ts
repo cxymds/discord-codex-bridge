@@ -303,6 +303,10 @@ export function isConfiguredCommandChannel(config: Pick<MinimalConfig, "discordC
   return channelId === config.discordChannelId;
 }
 
+export function isSupportedThreadChannelType(type: ChannelType): boolean {
+  return type === ChannelType.PublicThread || type === ChannelType.PrivateThread || type === ChannelType.AnnouncementThread;
+}
+
 export function createDiscordClient(config: BridgeConfig, handlers: ReturnType<typeof createBridgeHandlers>) {
   const client = new Client({
     intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.MessageContent]
@@ -392,7 +396,7 @@ export function createDiscordClient(config: BridgeConfig, handlers: ReturnType<t
   });
 
   client.on("messageCreate", async (message) => {
-    if (message.author.bot || (message.channel.type !== ChannelType.PublicThread && message.channel.type !== ChannelType.PrivateThread)) return;
+    if (message.author.bot || !isSupportedThreadChannelType(message.channel.type)) return;
     await handlers.handleThreadMessage({
       userId: message.author.id,
       roleIds: roleIdsFromMessage(message),

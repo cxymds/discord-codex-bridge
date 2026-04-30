@@ -12,6 +12,8 @@ describe("loadConfigFromEnv", () => {
     DISCORD_PROXY_URL: "http://127.0.0.1:7897",
     CODEX_BIN: "/Applications/Codex.app/Contents/Resources/codex",
     CODEX_HOME: "/Users/cxymds/.codex",
+    CODEX_TURN_DELIVERY: "auto",
+    CODEX_APP_SERVER_SOCKET: "/Users/cxymds/.codex/app-server-control/app-server-control.sock",
     BRIDGE_WORKSPACE_PATH: "/Users/cxymds/Documents/KAI",
     BRIDGE_DB_PATH: "./data/bridge.sqlite",
     BRIDGE_NOTIFY_HOST: "127.0.0.1",
@@ -25,6 +27,8 @@ describe("loadConfigFromEnv", () => {
     expect(config.discordProxyUrl).toBe("http://127.0.0.1:7897");
     expect(config.workspacePath).toBe("/Users/cxymds/Documents/KAI");
     expect(config.notifyPort).toBe(43765);
+    expect(config.codexTurnDelivery).toBe("auto");
+    expect(config.codexAppServerSocket).toBe("/Users/cxymds/.codex/app-server-control/app-server-control.sock");
   });
 
   it("derives the public base URL from notify host and port when omitted", () => {

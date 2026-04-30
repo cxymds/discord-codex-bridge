@@ -9,7 +9,7 @@ export interface ProcessResult {
 export type ProcessRunner = (
   command: string,
   args: string[],
-  options: { cwd: string; env: NodeJS.ProcessEnv }
+  options: { cwd: string; env: NodeJS.ProcessEnv; stdin?: string }
 ) => Promise<ProcessResult>;
 
 export const defaultRunner: ProcessRunner = (command, args, options) =>
@@ -17,7 +17,7 @@ export const defaultRunner: ProcessRunner = (command, args, options) =>
     const child = spawn(command, args, {
       cwd: options.cwd,
       env: options.env,
-      stdio: ["ignore", "pipe", "pipe"]
+      stdio: ["pipe", "pipe", "pipe"]
     });
 
     let stdout = "";
@@ -31,6 +31,11 @@ export const defaultRunner: ProcessRunner = (command, args, options) =>
     child.stderr.on("data", (chunk) => {
       stderr += chunk;
     });
+    if (options.stdin) {
+      child.stdin.end(options.stdin);
+    } else {
+      child.stdin.end();
+    }
     child.on("error", reject);
     child.on("close", (code) => {
       resolve({ code: code ?? 1, stdout, stderr });
