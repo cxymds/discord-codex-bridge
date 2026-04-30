@@ -122,4 +122,16 @@ describe("createCodexClient", () => {
 
     await expect(client.start("hello")).rejects.toThrow("Codex exited with code 1: bad");
   });
+
+  it("adds command and cwd context when Codex cannot be spawned", async () => {
+    const error = Object.assign(new Error("spawn /codex ENOENT"), { code: "ENOENT" });
+    const runner: ProcessRunner = vi.fn(async () => {
+      throw error;
+    });
+    const client = createCodexClient({ codexBin: "/codex", codexHome: "/home/.codex", cwd: "/bridge", runner });
+
+    await expect(client.startInProject("/missing/project", "hello")).rejects.toThrow(
+      "Failed to start Codex command /codex in /missing/project: spawn /codex ENOENT"
+    );
+  });
 });

@@ -8,7 +8,8 @@ import {
   type ChatInputCommandInteraction,
   type Message
 } from "discord.js";
-import { basename, resolve } from "node:path";
+import { existsSync } from "node:fs";
+import { basename, isAbsolute, resolve } from "node:path";
 import { isAuthorized } from "./authz.js";
 import { chunkDiscordMessage, makeProjectThreadTitle } from "./format.js";
 import type { BridgeConfig } from "./config.js";
@@ -24,6 +25,7 @@ interface MinimalConfig {
   discordChannelId: string;
   allowedUserIds: string[];
   allowedRoleIds: string[];
+  workspacePath: string | null;
 }
 
 interface DiscordPort {
@@ -37,9 +39,12 @@ interface HandlerDeps {
   codex: CodexClient;
   queue: SessionQueue;
   discord: DiscordPort;
+  projectExists?: (projectPath: string) => boolean;
 }
 
 export function createBridgeHandlers(deps: HandlerDeps) {
+  const projectExists = deps.projectExists ?? existsSync;
+
   function assertAuthorized(userId: string, roleIds: string[]) {
     if (!isAuthorized({ userId, roleIds }, deps.config.allowedUserIds, deps.config.allowedRoleIds)) {
       throw new Error("Not authorized");
@@ -59,10 +64,26 @@ export function createBridgeHandlers(deps: HandlerDeps) {
     await deps.discord.postMessage(threadId, `Codex run failed: ${message}`);
   }
 
+  function resolveProjectPath(project: string): string {
+    const trimmedProject = project.trim();
+    if (!trimmedProject) {
+      throw new Error("Project path is required");
+    }
+    const basePath = isAbsolute(trimmedProject) ? trimmedProject : resolve(deps.config.workspacePath ?? process.cwd(), trimmedProject);
+    return resolve(basePath);
+  }
+
+  function assertProjectPath(projectPath: string): void {
+    if (!projectExists(projectPath)) {
+      throw new Error(`Project path does not exist: ${projectPath}`);
+    }
+  }
+
   return {
     async handleNewCommand(input: { userId: string; roleIds: string[]; project: string; prompt: string }) {
       assertAuthorized(input.userId, input.roleIds);
-      const projectPath = resolve(input.project);
+      const projectPath = resolveProjectPath(input.project);
+      assertProjectPath(projectPath);
       const title = makeProjectThreadTitle(basename(projectPath), input.prompt);
       const thread = await deps.discord.createThread(deps.config.discordChannelId, title);
       const session = deps.store.createSession({

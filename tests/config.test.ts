@@ -12,6 +12,7 @@ describe("loadConfigFromEnv", () => {
     DISCORD_PROXY_URL: "http://127.0.0.1:7897",
     CODEX_BIN: "/Applications/Codex.app/Contents/Resources/codex",
     CODEX_HOME: "/Users/cxymds/.codex",
+    BRIDGE_WORKSPACE_PATH: "/Users/cxymds/Documents/KAI",
     BRIDGE_DB_PATH: "./data/bridge.sqlite",
     BRIDGE_NOTIFY_HOST: "127.0.0.1",
     BRIDGE_NOTIFY_PORT: "43765"
@@ -22,6 +23,7 @@ describe("loadConfigFromEnv", () => {
     expect(config.allowedUserIds).toEqual(["u1", "u2"]);
     expect(config.allowedRoleIds).toEqual([]);
     expect(config.discordProxyUrl).toBe("http://127.0.0.1:7897");
+    expect(config.workspacePath).toBe("/Users/cxymds/Documents/KAI");
     expect(config.notifyPort).toBe(43765);
   });
 

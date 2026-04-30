@@ -73,7 +73,14 @@ export function createCodexClient(options: CodexClientOptions) {
   const baseEnv = { ...process.env, CODEX_HOME: options.codexHome };
 
   async function run(args: string[], cwd = options.cwd): Promise<CodexRunResult> {
-    const result = await runner(options.codexBin, args, { cwd, env: baseEnv });
+    let result: Awaited<ReturnType<ProcessRunner>>;
+    try {
+      result = await runner(options.codexBin, args, { cwd, env: baseEnv });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      throw new Error(`Failed to start Codex command ${options.codexBin} in ${cwd}: ${message}`);
+    }
+
     if (result.code !== 0) {
       throw new Error(`Codex exited with code ${result.code}: ${result.stderr || result.stdout}`);
     }

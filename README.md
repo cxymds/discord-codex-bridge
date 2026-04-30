@@ -97,6 +97,7 @@ DISCORD_ALLOWED_ROLE_IDS=
 DISCORD_PROXY_URL=
 CODEX_BIN=/Applications/Codex.app/Contents/Resources/codex
 CODEX_HOME=/Users/cxymds/.codex
+BRIDGE_WORKSPACE_PATH=/Users/你的用户名/Documents
 BRIDGE_DB_PATH=./data/bridge.sqlite
 BRIDGE_NOTIFY_HOST=127.0.0.1
 BRIDGE_NOTIFY_PORT=43765
@@ -116,6 +117,7 @@ BRIDGE_PUBLIC_BASE_URL=http://127.0.0.1:43765
 | `DISCORD_PROXY_URL` | 否 | 访问 Discord API 需要代理时填写，例如 `http://127.0.0.1:7897`。 |
 | `CODEX_BIN` | 否 | Codex CLI 路径，默认 `/Applications/Codex.app/Contents/Resources/codex`。 |
 | `CODEX_HOME` | 否 | Codex 配置和会话目录，默认 `~/.codex`。 |
+| `BRIDGE_WORKSPACE_PATH` | 否 | Discord 中 `/codex new project:<项目名>` 的相对路径根目录。例如设为 `/Users/你/Documents/KAI` 后，`project:rustfs` 会解析为 `/Users/你/Documents/KAI/rustfs`。不设置时相对路径会基于 bridge 进程当前目录解析。 |
 | `BRIDGE_DB_PATH` | 否 | SQLite 状态库路径，默认 `./data/bridge.sqlite`。 |
 | `BRIDGE_NOTIFY_HOST` | 否 | 本地通知服务监听地址，默认 `127.0.0.1`。 |
 | `BRIDGE_NOTIFY_PORT` | 否 | 本地通知服务端口，默认 `43765`。 |
@@ -177,7 +179,15 @@ Discord-Codex bridge running. Notify endpoint: http://127.0.0.1:43765/notify/tur
 /codex new project:/Users/你的用户名/Documents/your-project prompt:你好，确认桥接可用
 ```
 
-Bot 会创建一个线程，Codex 的回复会出现在该线程中。之后直接在线程内发消息即可继续同一个 Codex 会话。
+如果已经设置 `BRIDGE_WORKSPACE_PATH`，也可以只写项目目录名：
+
+```text
+/codex new project:your-project prompt:你好，确认桥接可用
+```
+
+Bot 会先检查项目路径是否存在，再创建线程。Codex 的回复会出现在该线程中。之后直接在线程内发消息即可继续同一个 Codex 会话。
+
+注意：Discord 线程内的后续消息当前通过 `codex exec resume` 执行，并把结果写回同一个 Codex 会话文件。这个路径会让 Codex 执行并把最终结果发回 Discord，但它不是 Codex Desktop 窗口的实时输入通道；如果同一个会话正打开在 Desktop 中，Desktop 可能不会把外部 CLI turn 按实时聊天顺序展示。等本机 Codex app-server control socket 可用后，bridge 才能切换到 `thread/resume` + `turn/start` 这种更接近 Desktop 的实时同步方式。
 
 ## 验证和排错
 
@@ -211,5 +221,7 @@ DISCORD_PROXY_URL=http://127.0.0.1:7897
 - `At least one Discord allowed user id or role id is required`：`DISCORD_ALLOWED_USER_IDS` 和 `DISCORD_ALLOWED_ROLE_IDS` 都为空，至少填一个。
 - `/codex new` 不出现：确认 Bot 邀请链接包含 `applications.commands` scope，且服务已成功启动并注册 guild command。
 - 在线程里发消息没有反应：确认 `Message Content Intent` 已开启，且用户 ID 或角色 ID 在 allowlist 中。
+- `Project path does not exist`：如果 `/codex new project:rustfs` 使用的是项目名而不是绝对路径，请确认 `.env` 中的 `BRIDGE_WORKSPACE_PATH` 指向包含 `rustfs` 的父目录。
 - `Codex exited with code ...`：确认 `CODEX_BIN` 可执行，`project` 路径存在，并且 Codex app 已完成登录/授权。
+- `Failed to start Codex command ... in ...`：通常表示 `CODEX_BIN` 不存在、不可执行，或后面的 `in <cwd>` 项目目录不存在/不可访问。
 - notify 不回传：确认 bridge 正在运行，`BRIDGE_NOTIFY_PORT` 和 `~/.codex/config.toml` 中的 notify endpoint 一致。

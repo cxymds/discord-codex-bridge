@@ -14,7 +14,7 @@ describe("createBridgeHandlers", () => {
     };
     const codex = { startInProject: vi.fn(async () => ({ sessionId: "codex1", finalMessage: "done", rawEvents: [] })) };
     const handlers = createBridgeHandlers({
-      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: null },
       store: store as never,
       codex: codex as never,
       queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
@@ -28,9 +28,64 @@ describe("createBridgeHandlers", () => {
     expect(postMessage).toHaveBeenCalledWith("thread1", "done");
   });
 
+  it("resolves relative Discord project names from the configured workspace path", async () => {
+    const createThread = vi.fn(async () => ({ id: "thread1", name: "Hello" }));
+    const postMessage = vi.fn(async () => undefined);
+    const store = {
+      createSession: vi.fn((input) => ({ id: "bridge1", ...input, status: "active", createdAt: "", updatedAt: "", lastTurnAt: null, closedAt: null })),
+      setCodexSessionId: vi.fn(),
+      updateSessionStatus: vi.fn(),
+      markTurn: vi.fn(),
+      recordEvent: vi.fn()
+    };
+    const codex = { startInProject: vi.fn(async () => ({ sessionId: "codex1", finalMessage: "done", rawEvents: [] })) };
+    const handlers = createBridgeHandlers({
+      config: {
+        discordGuildId: "guild",
+        discordChannelId: "channel",
+        allowedUserIds: ["u1"],
+        allowedRoleIds: [],
+        workspacePath: "/Users/cxymds/Documents/KAI"
+      },
+      store: store as never,
+      codex: codex as never,
+      queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
+      discord: { createThread, postMessage },
+      projectExists: vi.fn(() => true)
+    });
+
+    await handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "rustfs", prompt: "Hello" });
+
+    expect(createThread).toHaveBeenCalledWith("channel", "[rustfs] Hello");
+    expect(codex.startInProject).toHaveBeenCalledWith("/Users/cxymds/Documents/KAI/rustfs", "Hello");
+  });
+
+  it("rejects missing Discord project paths before creating a thread", async () => {
+    const createThread = vi.fn(async () => ({ id: "thread1", name: "Hello" }));
+    const handlers = createBridgeHandlers({
+      config: {
+        discordGuildId: "guild",
+        discordChannelId: "channel",
+        allowedUserIds: ["u1"],
+        allowedRoleIds: [],
+        workspacePath: "/Users/cxymds/Documents/KAI"
+      },
+      store: {} as never,
+      codex: {} as never,
+      queue: {} as never,
+      discord: { createThread, postMessage: vi.fn() },
+      projectExists: vi.fn(() => false)
+    });
+
+    await expect(handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "missing", prompt: "Hello" })).rejects.toThrow(
+      "Project path does not exist: /Users/cxymds/Documents/KAI/missing"
+    );
+    expect(createThread).not.toHaveBeenCalled();
+  });
+
   it("denies unauthorized users", async () => {
     const handlers = createBridgeHandlers({
-      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: null },
       store: {} as never,
       codex: {} as never,
       queue: {} as never,
@@ -58,7 +113,7 @@ describe("createBridgeHandlers", () => {
       }))
     };
     const handlers = createBridgeHandlers({
-      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: null },
       store: store as never,
       codex: {} as never,
       queue: { pendingCount: vi.fn(() => 2) } as never,
@@ -79,11 +134,12 @@ describe("createBridgeHandlers", () => {
       recordEvent: vi.fn()
     };
     const handlers = createBridgeHandlers({
-      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: null },
       store: store as never,
       codex: { startInProject: vi.fn(async () => { throw error; }) } as never,
       queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
-      discord: { createThread: vi.fn(async () => ({ id: "thread1", name: "Hello" })), postMessage }
+      discord: { createThread: vi.fn(async () => ({ id: "thread1", name: "Hello" })), postMessage },
+      projectExists: vi.fn(() => true)
     });
 
     await expect(handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "/work", prompt: "Hello" })).rejects.toThrow("Codex exploded");
@@ -121,7 +177,7 @@ describe("createBridgeHandlers", () => {
       recordEvent: vi.fn()
     };
     const handlers = createBridgeHandlers({
-      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: null },
       store: store as never,
       codex: { resumeInProject: vi.fn(async () => { throw error; }) } as never,
       queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
@@ -164,7 +220,7 @@ describe("createBridgeHandlers", () => {
     };
     const codex = { resumeInProject: vi.fn(async () => ({ sessionId: "codex1", finalMessage: "continued", rawEvents: [] })) };
     const handlers = createBridgeHandlers({
-      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: null },
       store: store as never,
       codex: codex as never,
       queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
