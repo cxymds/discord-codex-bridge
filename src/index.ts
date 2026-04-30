@@ -7,6 +7,7 @@ import { loadConfigFromEnv, type BridgeConfig } from "./config.js";
 import { createStore } from "./store.js";
 import { createCodexClient } from "./codex.js";
 import { createAppServerCodexClient, defaultAppServerSocketPath } from "./appServer.js";
+import { ensureAppServerProcess } from "./appServerProcess.js";
 import { createTurnDeliveryClient } from "./turnDelivery.js";
 import { SessionQueue } from "./queue.js";
 import { startNotifyServer } from "./notify.js";
@@ -53,10 +54,19 @@ const codex = createCodexClient({
   codexHome: config.codexHome,
   cwd: process.cwd()
 });
+const appServerSocketPath = config.codexAppServerSocket ?? defaultAppServerSocketPath(config.codexHome);
+const appServerProcess = await ensureAppServerProcess({
+  autoStart: config.codexAppServerAutoStart,
+  deliveryMode: config.codexTurnDelivery,
+  codexBin: config.codexBin,
+  codexHome: config.codexHome,
+  socketPath: appServerSocketPath,
+  cwd: process.cwd()
+});
 const desktopCodex = createAppServerCodexClient({
   codexBin: config.codexBin,
   codexHome: config.codexHome,
-  socketPath: config.codexAppServerSocket ?? defaultAppServerSocketPath(config.codexHome),
+  socketPath: appServerSocketPath,
   cwd: process.cwd()
 });
 const turnDelivery = createTurnDeliveryClient({
@@ -150,6 +160,7 @@ async function shutdown() {
   transcriptPoller.stop();
   await notifyServer.close();
   client.destroy();
+  appServerProcess.close();
   store.close();
 }
 

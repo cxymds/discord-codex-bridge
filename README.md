@@ -102,6 +102,7 @@ CODEX_BIN=/Applications/Codex.app/Contents/Resources/codex
 CODEX_HOME=/Users/cxymds/.codex
 CODEX_TURN_DELIVERY=auto
 CODEX_APP_SERVER_SOCKET=/Users/cxymds/.codex/app-server-control/app-server-control.sock
+CODEX_APP_SERVER_AUTO_START=false
 BRIDGE_WORKSPACE_PATH=/Users/你的用户名/Documents
 BRIDGE_DB_PATH=./data/bridge.sqlite
 BRIDGE_NOTIFY_HOST=127.0.0.1
@@ -124,6 +125,7 @@ BRIDGE_PUBLIC_BASE_URL=http://127.0.0.1:43765
 | `CODEX_HOME` | 否 | Codex 配置和会话目录，默认 `~/.codex`。 |
 | `CODEX_TURN_DELIVERY` | 否 | Discord 线程回复的投递方式，`auto` 会优先写入 Codex Desktop UI，失败时回退到 `codex exec resume`；`desktop` 严格要求 Desktop app-server；`cli` 只使用旧的 CLI resume。默认 `auto`。 |
 | `CODEX_APP_SERVER_SOCKET` | 否 | Codex Desktop app-server control socket 路径，默认 `CODEX_HOME/app-server-control/app-server-control.sock`。 |
+| `CODEX_APP_SERVER_AUTO_START` | 否 | 是否由 bridge 启动本机 Codex app-server control socket。设为 `true` 时，`CODEX_TURN_DELIVERY=auto` 或 `desktop` 且 socket 不存在会自动运行 `codex app-server --listen unix://...`。默认 `false`。 |
 | `BRIDGE_WORKSPACE_PATH` | 否 | Discord 中 `/codex new project:<项目名>` 的相对路径根目录。例如设为 `/Users/你/Documents/KAI` 后，`project:rustfs` 会解析为 `/Users/你/Documents/KAI/rustfs`。不设置时相对路径会基于 bridge 进程当前目录解析。 |
 | `BRIDGE_DB_PATH` | 否 | SQLite 状态库路径，默认 `./data/bridge.sqlite`。 |
 | `BRIDGE_NOTIFY_HOST` | 否 | 本地通知服务监听地址，默认 `127.0.0.1`。 |
@@ -200,7 +202,7 @@ Discord-Codex bridge running. Notify endpoint: http://127.0.0.1:43765/notify/tur
 
 Bot 会按以下顺序解析 `project`：已登记项目名称、Codex 历史会话中唯一同名项目、绝对路径、`BRIDGE_WORKSPACE_PATH` 下的相对路径。解析完成后会先检查项目路径是否存在，再创建线程。Codex 的回复会出现在该线程中。之后直接在线程内发消息即可继续同一个 Codex 会话。
 
-默认情况下，Discord 线程内的后续消息会先尝试通过 Codex Desktop app-server 的 `thread/resume` + `turn/start` 投递到 Desktop UI。这样同一个会话打开在 Codex Desktop 中时，Discord 消息会作为新的用户输入进入界面并启动请求。如果本机 Codex Desktop 没有开放 app-server control socket，bridge 会自动回退到旧的 `codex exec resume`，保证 Discord 线程仍能收到最终回复。若希望严格要求 Desktop UI 同步，可以设置 `CODEX_TURN_DELIVERY=desktop`。
+默认情况下，Discord 线程内的后续消息会先尝试通过 Codex Desktop app-server 的 `thread/resume` + `turn/start` 投递到 Desktop UI。这样同一个会话打开在 Codex Desktop 中时，Discord 消息会作为新的用户输入进入界面并启动请求。如果本机 Codex Desktop 没有开放 app-server control socket，bridge 会自动回退到旧的 `codex exec resume`，保证 Discord 线程仍能收到最终回复。若希望严格要求 Desktop UI 同步，可以设置 `CODEX_TURN_DELIVERY=desktop`。如果希望 bridge 启动时自动创建本机 control socket，可以同时设置 `CODEX_APP_SERVER_AUTO_START=true`；bridge 会复用已存在的 socket，不会重复启动 app-server。
 
 ## 验证和排错
 
@@ -238,5 +240,5 @@ DISCORD_PROXY_URL=http://127.0.0.1:7897
 - `Project path does not exist`：如果 `/codex new project:rustfs` 使用的是项目名而不是绝对路径，请确认 `.env` 中的 `BRIDGE_WORKSPACE_PATH` 指向包含 `rustfs` 的父目录。
 - `Codex exited with code ...`：确认 `CODEX_BIN` 可执行，`project` 路径存在，并且 Codex app 已完成登录/授权。
 - `Failed to start Codex command ... in ...`：通常表示 `CODEX_BIN` 不存在、不可执行，或后面的 `in <cwd>` 项目目录不存在/不可访问。
-- `Codex Desktop app-server proxy failed`：严格 Desktop UI 投递模式无法连接 app-server control socket。确认 Codex Desktop 已开启本机 Remote Control/control socket；默认 `auto` 模式会自动回退到 CLI resume。
+- `Codex Desktop app-server proxy failed`：严格 Desktop UI 投递模式无法连接 app-server control socket。可以设置 `CODEX_APP_SERVER_AUTO_START=true` 让 bridge 启动本机 control socket；默认 `auto` 模式会自动回退到 CLI resume。
 - notify 不回传：确认 bridge 正在运行，`BRIDGE_NOTIFY_PORT` 和 `~/.codex/config.toml` 中的 notify endpoint 一致。

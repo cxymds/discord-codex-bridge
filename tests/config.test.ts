@@ -14,6 +14,7 @@ describe("loadConfigFromEnv", () => {
     CODEX_HOME: "/Users/cxymds/.codex",
     CODEX_TURN_DELIVERY: "auto",
     CODEX_APP_SERVER_SOCKET: "/Users/cxymds/.codex/app-server-control/app-server-control.sock",
+    CODEX_APP_SERVER_AUTO_START: "true",
     BRIDGE_WORKSPACE_PATH: "/Users/cxymds/Documents/KAI",
     BRIDGE_DB_PATH: "./data/bridge.sqlite",
     BRIDGE_NOTIFY_HOST: "127.0.0.1",
@@ -29,6 +30,15 @@ describe("loadConfigFromEnv", () => {
     expect(config.notifyPort).toBe(43765);
     expect(config.codexTurnDelivery).toBe("auto");
     expect(config.codexAppServerSocket).toBe("/Users/cxymds/.codex/app-server-control/app-server-control.sock");
+    expect(config.codexAppServerAutoStart).toBe(true);
+  });
+
+  it("leaves app-server auto-start disabled by default", () => {
+    const { CODEX_APP_SERVER_AUTO_START: _autoStart, ...env } = validEnv;
+
+    const config = loadConfigFromEnv(env);
+
+    expect(config.codexAppServerAutoStart).toBe(false);
   });
 
   it("derives the public base URL from notify host and port when omitted", () => {

@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
-import { ChannelType } from "discord.js";
+import { ChannelType, MessageFlags } from "discord.js";
 import {
   buildSlashCommands,
   createBridgeHandlers,
@@ -8,6 +8,16 @@ import {
   isSupportedThreadChannelType,
   roleIdsFromInteractionMember
 } from "../src/bot.js";
+
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (error: unknown) => void;
+  const promise = new Promise<T>((innerResolve, innerReject) => {
+    resolve = innerResolve;
+    reject = innerReject;
+  });
+  return { promise, resolve, reject };
+}
 
 describe("createBridgeHandlers", () => {
   it("creates a session and posts the first Codex result", async () => {
@@ -128,6 +138,48 @@ describe("createBridgeHandlers", () => {
     expect(codex.startInProject).toHaveBeenCalledWith("/Users/cxymds/Documents/KAI/rustfs", "Hello");
   });
 
+  it("returns after creating the Discord thread while the first Codex turn runs in the background", async () => {
+    const createThread = vi.fn(async () => ({ id: "thread1", name: "Hello" }));
+    const postMessage = vi.fn(async () => undefined);
+    const store = {
+      findProjectByName: vi.fn(() => null),
+      createSession: vi.fn((input) => ({ id: "bridge1", ...input, status: "active", createdAt: "", updatedAt: "", lastTurnAt: null, closedAt: null })),
+      setCodexSessionId: vi.fn(),
+      updateSessionStatus: vi.fn(),
+      markTurn: vi.fn(),
+      recordEvent: vi.fn()
+    };
+    const turn = deferred<{ sessionId: string; finalMessage: string; rawEvents: unknown[] }>();
+    const codex = { startInProject: vi.fn(() => turn.promise) };
+    let queued: Promise<unknown> | null = null;
+    const queue = {
+      enqueue: vi.fn((_id, work) => {
+        queued = work();
+        return queued;
+      }),
+      pendingCount: vi.fn(() => 0)
+    };
+    const handlers = createBridgeHandlers({
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: null },
+      store: store as never,
+      codex: codex as never,
+      queue: queue as never,
+      discord: { createThread, postMessage },
+      projectExists: vi.fn(() => true)
+    });
+
+    const command = handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "/work", prompt: "Hello" });
+    await expect(command).resolves.toBeUndefined();
+
+    expect(createThread).toHaveBeenCalledWith("channel", "[work] Hello");
+    expect(codex.startInProject).toHaveBeenCalledWith("/work", "Hello");
+    expect(postMessage).not.toHaveBeenCalled();
+
+    turn.resolve({ sessionId: "codex1", finalMessage: "done", rawEvents: [] });
+    await queued;
+    expect(postMessage).toHaveBeenCalledWith("thread1", "done");
+  });
+
   it("adds, lists, and removes project aliases", async () => {
     const store = {
       upsertProject: vi.fn(),
@@ -219,6 +271,7 @@ describe("createBridgeHandlers", () => {
   it("marks new sessions as error and reports Codex start failures", async () => {
     const error = new Error("Codex exploded");
     const postMessage = vi.fn(async () => undefined);
+    let queued: Promise<unknown> | null = null;
     const store = {
       createSession: vi.fn((input) => ({ id: "bridge1", ...input, status: "active", createdAt: "", updatedAt: "", lastTurnAt: null, closedAt: null })),
       setCodexSessionId: vi.fn(),
@@ -230,12 +283,19 @@ describe("createBridgeHandlers", () => {
       config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: null },
       store: store as never,
       codex: { startInProject: vi.fn(async () => { throw error; }) } as never,
-      queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
+      queue: {
+        enqueue: vi.fn((_id, work) => {
+          queued = work();
+          return queued;
+        }),
+        pendingCount: vi.fn(() => 0)
+      } as never,
       discord: { createThread: vi.fn(async () => ({ id: "thread1", name: "Hello" })), postMessage },
       projectExists: vi.fn(() => true)
     });
 
-    await expect(handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "/work", prompt: "Hello" })).rejects.toThrow("Codex exploded");
+    await expect(handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "/work", prompt: "Hello" })).resolves.toBeUndefined();
+    await expect(queued).rejects.toThrow("Codex exploded");
 
     expect(store.updateSessionStatus).toHaveBeenNthCalledWith(1, "bridge1", "running");
     expect(store.updateSessionStatus).toHaveBeenNthCalledWith(2, "bridge1", "error");
@@ -356,6 +416,39 @@ describe("isSupportedThreadChannelType", () => {
 });
 
 describe("createDiscordClient", () => {
+  it("uses interaction response flags for ephemeral replies", async () => {
+    const client = createDiscordClient(
+      { discordChannelId: "commands", allowedUserIds: ["u1"], allowedRoleIds: [] } as never,
+      {
+        handleNewCommand: vi.fn(async () => undefined)
+      } as never
+    );
+    const deferReply = vi.fn(async () => undefined);
+    const editReply = vi.fn(async () => undefined);
+
+    client.emit("interactionCreate", {
+      isAutocomplete: () => false,
+      isChatInputCommand: () => true,
+      commandName: "codex",
+      channelId: "commands",
+      user: { id: "u1" },
+      member: { roles: [] },
+      deferred: false,
+      replied: false,
+      options: {
+        getSubcommand: () => "new",
+        getSubcommandGroup: () => null,
+        getString: (name: string) => (name === "project" ? "/work" : "Hello")
+      },
+      deferReply,
+      editReply
+    } as never);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(deferReply).toHaveBeenCalledWith({ flags: MessageFlags.Ephemeral });
+    expect(deferReply).not.toHaveBeenCalledWith(expect.objectContaining({ ephemeral: true }));
+  });
+
   it("does not emit client errors when an autocomplete interaction expires before response", async () => {
     const client = createDiscordClient(
       { allowedUserIds: ["u1"], allowedRoleIds: [] } as never,

@@ -12,6 +12,10 @@ const envSchema = z.object({
   CODEX_HOME: z.string().default(`${process.env.HOME ?? ""}/.codex`),
   CODEX_TURN_DELIVERY: z.enum(["cli", "desktop", "auto"]).default("auto"),
   CODEX_APP_SERVER_SOCKET: z.string().optional(),
+  CODEX_APP_SERVER_AUTO_START: z
+    .enum(["true", "false", "1", "0", "yes", "no", "on", "off"])
+    .default("false")
+    .transform((value) => ["true", "1", "yes", "on"].includes(value)),
   BRIDGE_WORKSPACE_PATH: z.string().optional(),
   BRIDGE_DB_PATH: z.string().default("./data/bridge.sqlite"),
   BRIDGE_NOTIFY_HOST: z.string().default("127.0.0.1"),
@@ -31,6 +35,7 @@ export interface BridgeConfig {
   codexHome: string;
   codexTurnDelivery: "cli" | "desktop" | "auto";
   codexAppServerSocket: string | null;
+  codexAppServerAutoStart: boolean;
   workspacePath: string | null;
   dbPath: string;
   notifyHost: string;
@@ -66,6 +71,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): BridgeC
     codexHome: parsed.CODEX_HOME,
     codexTurnDelivery: parsed.CODEX_TURN_DELIVERY,
     codexAppServerSocket: parsed.CODEX_APP_SERVER_SOCKET ?? null,
+    codexAppServerAutoStart: parsed.CODEX_APP_SERVER_AUTO_START,
     workspacePath: parsed.BRIDGE_WORKSPACE_PATH ?? null,
     dbPath: parsed.BRIDGE_DB_PATH,
     notifyHost: parsed.BRIDGE_NOTIFY_HOST,

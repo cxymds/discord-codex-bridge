@@ -2,6 +2,7 @@ import {
   ChannelType,
   Client,
   GatewayIntentBits,
+  MessageFlags,
   RESTJSONErrorCodes,
   REST,
   Routes,
@@ -114,7 +115,7 @@ export function createBridgeHandlers(deps: HandlerDeps) {
       });
 
       deps.store.recordEvent({ sessionId: session.id, source: "discord", kind: "new", payload: { project: projectPath, prompt: input.prompt } });
-      await deps.queue.enqueue(session.id, async () => {
+      const queued = deps.queue.enqueue(session.id, async () => {
         deps.store.updateSessionStatus(session.id, "running");
         try {
           const result = await deps.codex.startInProject(projectPath, input.prompt);
@@ -128,6 +129,7 @@ export function createBridgeHandlers(deps: HandlerDeps) {
           throw error;
         }
       });
+      queued.catch(() => undefined);
     },
 
     async handleProjectAddCommand(input: { userId: string; roleIds: string[]; name: string; path: string }) {
@@ -340,7 +342,7 @@ export function createDiscordClient(config: BridgeConfig, handlers: ReturnType<t
       const subcommand = interaction.options.getSubcommand();
       const group = interaction.options.getSubcommandGroup(false);
       if (group === "project") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         if (subcommand === "add") {
           await interaction.editReply(
             await handlers.handleProjectAddCommand({
@@ -368,10 +370,10 @@ export function createDiscordClient(config: BridgeConfig, handlers: ReturnType<t
         }
       } else if (subcommand === "new") {
         if (!isConfiguredCommandChannel(config, interaction.channelId)) {
-          await interaction.reply({ ephemeral: true, content: "Use /codex new in the configured Discord channel." });
+          await interaction.reply({ flags: MessageFlags.Ephemeral, content: "Use /codex new in the configured Discord channel." });
           return;
         }
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await handlers.handleNewCommand({
           userId: interaction.user.id,
           roleIds: roleIdsFromInteraction(interaction),
@@ -380,7 +382,7 @@ export function createDiscordClient(config: BridgeConfig, handlers: ReturnType<t
         });
         await interaction.editReply("Codex thread created.");
       } else if (subcommand === "done") {
-        await interaction.deferReply({ ephemeral: true });
+        await interaction.deferReply({ flags: MessageFlags.Ephemeral });
         await handlers.handleDoneCommand({
           userId: interaction.user.id,
           roleIds: roleIdsFromInteraction(interaction),
@@ -389,7 +391,7 @@ export function createDiscordClient(config: BridgeConfig, handlers: ReturnType<t
         await interaction.editReply("Codex session closed.");
       } else if (subcommand === "status") {
         await interaction.reply({
-          ephemeral: true,
+          flags: MessageFlags.Ephemeral,
           content: await handlers.handleStatusCommand({
             userId: interaction.user.id,
             roleIds: roleIdsFromInteraction(interaction),
@@ -400,7 +402,7 @@ export function createDiscordClient(config: BridgeConfig, handlers: ReturnType<t
     } catch (error) {
       const content = error instanceof Error ? error.message : "Unknown bridge error";
       if (interaction.deferred || interaction.replied) await interaction.editReply(content);
-      else await interaction.reply({ ephemeral: true, content });
+      else await interaction.reply({ flags: MessageFlags.Ephemeral, content });
     }
   });
 
