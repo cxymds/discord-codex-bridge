@@ -7,6 +7,7 @@ const envSchema = z.object({
   DISCORD_CHANNEL_ID: z.string().min(1),
   DISCORD_ALLOWED_USER_IDS: z.string().default(""),
   DISCORD_ALLOWED_ROLE_IDS: z.string().default(""),
+  DISCORD_PROXY_URL: z.string().optional(),
   CODEX_BIN: z.string().default("/Applications/Codex.app/Contents/Resources/codex"),
   CODEX_HOME: z.string().default(`${process.env.HOME ?? ""}/.codex`),
   BRIDGE_DB_PATH: z.string().default("./data/bridge.sqlite"),
@@ -22,6 +23,7 @@ export interface BridgeConfig {
   discordChannelId: string;
   allowedUserIds: string[];
   allowedRoleIds: string[];
+  discordProxyUrl: string | null;
   codexBin: string;
   codexHome: string;
   dbPath: string;
@@ -53,6 +55,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): BridgeC
     discordChannelId: parsed.DISCORD_CHANNEL_ID,
     allowedUserIds,
     allowedRoleIds,
+    discordProxyUrl: parsed.DISCORD_PROXY_URL ?? null,
     codexBin: parsed.CODEX_BIN,
     codexHome: parsed.CODEX_HOME,
     dbPath: parsed.BRIDGE_DB_PATH,

@@ -1,15 +1,42 @@
 import "dotenv/config";
-import { ChannelType, type NewsChannel, type TextChannel } from "discord.js";
-import { loadConfigFromEnv } from "./config.js";
+import type { NewsChannel, TextChannel } from "discord.js";
+import { HttpsProxyAgent } from "https-proxy-agent";
+import { createRequire } from "node:module";
+import { ProxyAgent, setGlobalDispatcher } from "undici";
+import { loadConfigFromEnv, type BridgeConfig } from "./config.js";
 import { createStore } from "./store.js";
 import { createCodexClient } from "./codex.js";
 import { SessionQueue } from "./queue.js";
 import { startNotifyServer } from "./notify.js";
-import { createBridgeHandlers, createDiscordClient, registerCommands } from "./bot.js";
 import { chunkDiscordMessage } from "./format.js";
 import { extractNotifyFields } from "./notifyPayload.js";
 
+async function configureDiscordProxy(config: BridgeConfig) {
+  if (!config.discordProxyUrl) {
+    return;
+  }
+
+  setGlobalDispatcher(new ProxyAgent(config.discordProxyUrl));
+
+  const require = createRequire(import.meta.url);
+  const ws = require("ws") as typeof import("ws");
+  const OriginalWebSocket = ws.WebSocket;
+  const agent = new HttpsProxyAgent(config.discordProxyUrl);
+  class ProxiedWebSocket extends OriginalWebSocket {
+    constructor(address: ConstructorParameters<typeof OriginalWebSocket>[0], protocols?: ConstructorParameters<typeof OriginalWebSocket>[1], options: Record<string, unknown> = {}) {
+      super(address, protocols, { ...options, agent });
+    }
+  }
+
+  const patchedWs = ws as unknown as { WebSocket: unknown; default: unknown };
+  patchedWs.WebSocket = ProxiedWebSocket;
+  patchedWs.default = ProxiedWebSocket;
+}
+
 const config = loadConfigFromEnv();
+await configureDiscordProxy(config);
+const { ChannelType } = await import("discord.js");
+const { createBridgeHandlers, createDiscordClient, registerCommands } = await import("./bot.js");
 const store = createStore(config.dbPath);
 const codex = createCodexClient({
   codexBin: config.codexBin,

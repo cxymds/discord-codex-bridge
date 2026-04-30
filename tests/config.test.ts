@@ -9,6 +9,7 @@ describe("loadConfigFromEnv", () => {
     DISCORD_CHANNEL_ID: "channel",
     DISCORD_ALLOWED_USER_IDS: "u1,u2",
     DISCORD_ALLOWED_ROLE_IDS: "",
+    DISCORD_PROXY_URL: "http://127.0.0.1:7897",
     CODEX_BIN: "/Applications/Codex.app/Contents/Resources/codex",
     CODEX_HOME: "/Users/cxymds/.codex",
     BRIDGE_DB_PATH: "./data/bridge.sqlite",
@@ -20,6 +21,7 @@ describe("loadConfigFromEnv", () => {
     const config = loadConfigFromEnv(validEnv);
     expect(config.allowedUserIds).toEqual(["u1", "u2"]);
     expect(config.allowedRoleIds).toEqual([]);
+    expect(config.discordProxyUrl).toBe("http://127.0.0.1:7897");
     expect(config.notifyPort).toBe(43765);
   });
 

@@ -9,6 +9,7 @@
    - `DISCORD_GUILD_ID`
    - `DISCORD_CHANNEL_ID`
    - `DISCORD_ALLOWED_USER_IDS` or `DISCORD_ALLOWED_ROLE_IDS`
+   - `DISCORD_PROXY_URL` if Discord is not reachable directly from your terminal
 5. Run `npm install`.
 6. Run `npm run build`.
 7. Run `npm run dev`.
@@ -23,3 +24,17 @@ notify = ["node", "/Users/cxymds/Documents/New project 2/scripts/codex-discord-n
 ```
 
 Keep a backup of the previous `notify` value before changing it.
+
+## Proxy
+
+If `npm run dev` fails with `ConnectTimeoutError` for `discord.com:443`, set:
+
+```env
+DISCORD_PROXY_URL=http://127.0.0.1:7897
+```
+
+You can verify the proxy first with:
+
+```bash
+curl -I --proxy http://127.0.0.1:7897 --connect-timeout 10 https://discord.com/api/v10/gateway
+```
