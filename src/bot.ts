@@ -5,6 +5,7 @@ import {
   REST,
   Routes,
   SlashCommandBuilder,
+  type AutocompleteInteraction,
   type ChatInputCommandInteraction,
   type Message
 } from "discord.js";
@@ -14,8 +15,10 @@ import { isAuthorized } from "./authz.js";
 import { chunkDiscordMessage, makeProjectThreadTitle } from "./format.js";
 import type { BridgeConfig } from "./config.js";
 import type { createCodexClient } from "./codex.js";
+import { discoverCodexProjects, formatProjectChoices, mergeProjectChoices } from "./projects.js";
 import type { SessionQueue } from "./queue.js";
 import type { createStore } from "./store.js";
+import type { ProjectChoice } from "./types.js";
 
 type Store = ReturnType<typeof createStore>;
 type CodexClient = ReturnType<typeof createCodexClient>;
@@ -26,6 +29,7 @@ interface MinimalConfig {
   allowedUserIds: string[];
   allowedRoleIds: string[];
   workspacePath: string | null;
+  codexHome?: string;
 }
 
 interface DiscordPort {
@@ -40,10 +44,12 @@ interface HandlerDeps {
   queue: SessionQueue;
   discord: DiscordPort;
   projectExists?: (projectPath: string) => boolean;
+  discoverProjects?: () => ProjectChoice[];
 }
 
 export function createBridgeHandlers(deps: HandlerDeps) {
   const projectExists = deps.projectExists ?? existsSync;
+  const discoverProjects = deps.discoverProjects ?? (() => discoverCodexProjects(deps.config.codexHome ?? ""));
 
   function assertAuthorized(userId: string, roleIds: string[]) {
     if (!isAuthorized({ userId, roleIds }, deps.config.allowedUserIds, deps.config.allowedRoleIds)) {
@@ -68,6 +74,17 @@ export function createBridgeHandlers(deps: HandlerDeps) {
     const trimmedProject = project.trim();
     if (!trimmedProject) {
       throw new Error("Project path is required");
+    }
+    if (!isAbsolute(trimmedProject)) {
+      const registeredProject = deps.store.findProjectByName(trimmedProject);
+      if (registeredProject) {
+        return resolve(registeredProject.path);
+      }
+
+      const discoveredMatches = discoverProjects().filter((choice) => choice.name === trimmedProject);
+      if (discoveredMatches.length === 1) {
+        return resolve(discoveredMatches[0].path);
+      }
     }
     const basePath = isAbsolute(trimmedProject) ? trimmedProject : resolve(deps.config.workspacePath ?? process.cwd(), trimmedProject);
     return resolve(basePath);
@@ -110,6 +127,38 @@ export function createBridgeHandlers(deps: HandlerDeps) {
           throw error;
         }
       });
+    },
+
+    async handleProjectAddCommand(input: { userId: string; roleIds: string[]; name: string; path: string }) {
+      assertAuthorized(input.userId, input.roleIds);
+      const name = input.name.trim();
+      if (!name) {
+        throw new Error("Project name is required");
+      }
+      const projectPath = resolve(input.path);
+      assertProjectPath(projectPath);
+      deps.store.upsertProject({ name, path: projectPath });
+      return `Project registered: ${name} -> ${projectPath}`;
+    },
+
+    async handleProjectListCommand(input: { userId: string; roleIds: string[] }) {
+      assertAuthorized(input.userId, input.roleIds);
+      const projects = deps.store.listProjects();
+      if (projects.length === 0) {
+        return "No registered projects.";
+      }
+      return projects.map((project) => `${project.name} -> ${project.path}`).join("\n");
+    },
+
+    async handleProjectRemoveCommand(input: { userId: string; roleIds: string[]; name: string }) {
+      assertAuthorized(input.userId, input.roleIds);
+      const removed = deps.store.removeProject(input.name.trim());
+      return removed ? `Project removed: ${input.name.trim()}` : `Project not found: ${input.name.trim()}`;
+    },
+
+    async handleProjectAutocomplete(input: { query: string }) {
+      const registeredChoices: ProjectChoice[] = deps.store.listProjects().map((project) => ({ name: project.name, path: project.path, source: "registered" }));
+      return formatProjectChoices(mergeProjectChoices(registeredChoices, discoverProjects()), input.query);
     },
 
     async handleThreadMessage(input: { userId: string; roleIds: string[]; threadId: string; content: string }) {
@@ -180,8 +229,29 @@ export function buildSlashCommands() {
         sub
           .setName("new")
           .setDescription("Create a new Codex session")
-          .addStringOption((option) => option.setName("project").setDescription("Project path for this Codex session").setRequired(true))
+          .addStringOption((option) =>
+            option.setName("project").setDescription("Project name or path for this Codex session").setRequired(true).setAutocomplete(true)
+          )
           .addStringOption((option) => option.setName("prompt").setDescription("Initial prompt").setRequired(true))
+      )
+      .addSubcommandGroup((group) =>
+        group
+          .setName("project")
+          .setDescription("Manage Codex project aliases")
+          .addSubcommand((sub) =>
+            sub
+              .setName("add")
+              .setDescription("Register a project alias")
+              .addStringOption((option) => option.setName("name").setDescription("Project name used in /codex new").setRequired(true))
+              .addStringOption((option) => option.setName("path").setDescription("Absolute project path").setRequired(true))
+          )
+          .addSubcommand((sub) => sub.setName("list").setDescription("List registered project aliases"))
+          .addSubcommand((sub) =>
+            sub
+              .setName("remove")
+              .setDescription("Remove a project alias")
+              .addStringOption((option) => option.setName("name").setDescription("Project name").setRequired(true).setAutocomplete(true))
+          )
       )
       .addSubcommand((sub) => sub.setName("done").setDescription("Close this Codex session with a final summary"))
       .addSubcommand((sub) => sub.setName("status").setDescription("Show this Codex session status"))
@@ -220,6 +290,10 @@ function roleIdsFromInteraction(interaction: ChatInputCommandInteraction): strin
   return roleIdsFromInteractionMember(interaction.member);
 }
 
+function roleIdsFromAutocomplete(interaction: AutocompleteInteraction): string[] {
+  return roleIdsFromInteractionMember(interaction.member);
+}
+
 function roleIdsFromMessage(message: Message): string[] {
   const roles = message.member?.roles.cache;
   return roles ? [...roles.keys()] : [];
@@ -235,10 +309,51 @@ export function createDiscordClient(config: BridgeConfig, handlers: ReturnType<t
   });
 
   client.on("interactionCreate", async (interaction) => {
+    if (interaction.isAutocomplete() && interaction.commandName === "codex") {
+      try {
+        assertAutocompleteAuthorized(interaction, config);
+        const focused = interaction.options.getFocused(true);
+        if (focused.name === "project" || focused.name === "name") {
+          await interaction.respond(await handlers.handleProjectAutocomplete({ query: String(focused.value ?? "") }));
+        }
+      } catch {
+        await interaction.respond([]);
+      }
+      return;
+    }
+
     if (!interaction.isChatInputCommand() || interaction.commandName !== "codex") return;
     try {
       const subcommand = interaction.options.getSubcommand();
-      if (subcommand === "new") {
+      const group = interaction.options.getSubcommandGroup(false);
+      if (group === "project") {
+        await interaction.deferReply({ ephemeral: true });
+        if (subcommand === "add") {
+          await interaction.editReply(
+            await handlers.handleProjectAddCommand({
+              userId: interaction.user.id,
+              roleIds: roleIdsFromInteraction(interaction),
+              name: interaction.options.getString("name", true),
+              path: interaction.options.getString("path", true)
+            })
+          );
+        } else if (subcommand === "list") {
+          await interaction.editReply(
+            await handlers.handleProjectListCommand({
+              userId: interaction.user.id,
+              roleIds: roleIdsFromInteraction(interaction)
+            })
+          );
+        } else if (subcommand === "remove") {
+          await interaction.editReply(
+            await handlers.handleProjectRemoveCommand({
+              userId: interaction.user.id,
+              roleIds: roleIdsFromInteraction(interaction),
+              name: interaction.options.getString("name", true)
+            })
+          );
+        }
+      } else if (subcommand === "new") {
         if (!isConfiguredCommandChannel(config, interaction.channelId)) {
           await interaction.reply({ ephemeral: true, content: "Use /codex new in the configured Discord channel." });
           return;
@@ -287,4 +402,10 @@ export function createDiscordClient(config: BridgeConfig, handlers: ReturnType<t
   });
 
   return client;
+}
+
+function assertAutocompleteAuthorized(interaction: AutocompleteInteraction, config: BridgeConfig): void {
+  if (!isAuthorized({ userId: interaction.user.id, roleIds: roleIdsFromAutocomplete(interaction) }, config.allowedUserIds, config.allowedRoleIds)) {
+    throw new Error("Not authorized");
+  }
 }

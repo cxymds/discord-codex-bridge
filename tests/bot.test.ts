@@ -1,11 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
-import { createBridgeHandlers, isConfiguredCommandChannel, roleIdsFromInteractionMember } from "../src/bot.js";
+import { buildSlashCommands, createBridgeHandlers, isConfiguredCommandChannel, roleIdsFromInteractionMember } from "../src/bot.js";
 
 describe("createBridgeHandlers", () => {
   it("creates a session and posts the first Codex result", async () => {
     const createThread = vi.fn(async () => ({ id: "thread1", name: "Hello" }));
     const postMessage = vi.fn(async () => undefined);
     const store = {
+      findProjectByName: vi.fn(() => null),
       createSession: vi.fn((input) => ({ id: "bridge1", ...input, status: "active", createdAt: "", updatedAt: "", lastTurnAt: null, closedAt: null })),
       setCodexSessionId: vi.fn(),
       updateSessionStatus: vi.fn(),
@@ -32,6 +33,7 @@ describe("createBridgeHandlers", () => {
     const createThread = vi.fn(async () => ({ id: "thread1", name: "Hello" }));
     const postMessage = vi.fn(async () => undefined);
     const store = {
+      findProjectByName: vi.fn(() => null),
       createSession: vi.fn((input) => ({ id: "bridge1", ...input, status: "active", createdAt: "", updatedAt: "", lastTurnAt: null, closedAt: null })),
       setCodexSessionId: vi.fn(),
       updateSessionStatus: vi.fn(),
@@ -60,6 +62,89 @@ describe("createBridgeHandlers", () => {
     expect(codex.startInProject).toHaveBeenCalledWith("/Users/cxymds/Documents/KAI/rustfs", "Hello");
   });
 
+  it("resolves registered project aliases before workspace paths", async () => {
+    const createThread = vi.fn(async () => ({ id: "thread1", name: "Hello" }));
+    const postMessage = vi.fn(async () => undefined);
+    const store = {
+      findProjectByName: vi.fn(() => ({ name: "rustfs", path: "/Users/cxymds/Documents/KAI/rustfs-real", createdAt: "", updatedAt: "" })),
+      createSession: vi.fn((input) => ({ id: "bridge1", ...input, status: "active", createdAt: "", updatedAt: "", lastTurnAt: null, closedAt: null })),
+      setCodexSessionId: vi.fn(),
+      updateSessionStatus: vi.fn(),
+      markTurn: vi.fn(),
+      recordEvent: vi.fn()
+    };
+    const codex = { startInProject: vi.fn(async () => ({ sessionId: "codex1", finalMessage: "done", rawEvents: [] })) };
+    const handlers = createBridgeHandlers({
+      config: {
+        discordGuildId: "guild",
+        discordChannelId: "channel",
+        allowedUserIds: ["u1"],
+        allowedRoleIds: [],
+        workspacePath: "/Users/cxymds/Documents/KAI"
+      },
+      store: store as never,
+      codex: codex as never,
+      queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
+      discord: { createThread, postMessage },
+      projectExists: vi.fn(() => true)
+    });
+
+    await handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "rustfs", prompt: "Hello" });
+
+    expect(codex.startInProject).toHaveBeenCalledWith("/Users/cxymds/Documents/KAI/rustfs-real", "Hello");
+  });
+
+  it("uses uniquely discovered Codex projects when no registered alias exists", async () => {
+    const createThread = vi.fn(async () => ({ id: "thread1", name: "Hello" }));
+    const store = {
+      findProjectByName: vi.fn(() => null),
+      createSession: vi.fn((input) => ({ id: "bridge1", ...input, status: "active", createdAt: "", updatedAt: "", lastTurnAt: null, closedAt: null })),
+      setCodexSessionId: vi.fn(),
+      updateSessionStatus: vi.fn(),
+      markTurn: vi.fn(),
+      recordEvent: vi.fn()
+    };
+    const codex = { startInProject: vi.fn(async () => ({ sessionId: "codex1", finalMessage: "done", rawEvents: [] })) };
+    const handlers = createBridgeHandlers({
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: "/workspace" },
+      store: store as never,
+      codex: codex as never,
+      queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
+      discord: { createThread, postMessage: vi.fn() },
+      projectExists: vi.fn(() => true),
+      discoverProjects: vi.fn(() => [{ name: "rustfs", path: "/Users/cxymds/Documents/KAI/rustfs", source: "codex" as const }])
+    });
+
+    await handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "rustfs", prompt: "Hello" });
+
+    expect(codex.startInProject).toHaveBeenCalledWith("/Users/cxymds/Documents/KAI/rustfs", "Hello");
+  });
+
+  it("adds, lists, and removes project aliases", async () => {
+    const store = {
+      upsertProject: vi.fn(),
+      listProjects: vi.fn(() => [
+        { name: "console", path: "/Users/cxymds/Documents/KAI/console", createdAt: "", updatedAt: "" },
+        { name: "rustfs", path: "/Users/cxymds/Documents/KAI/rustfs", createdAt: "", updatedAt: "" }
+      ]),
+      removeProject: vi.fn(() => true)
+    };
+    const handlers = createBridgeHandlers({
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: null },
+      store: store as never,
+      codex: {} as never,
+      queue: {} as never,
+      discord: { createThread: vi.fn(), postMessage: vi.fn() },
+      projectExists: vi.fn(() => true)
+    });
+
+    await expect(
+      handlers.handleProjectAddCommand({ userId: "u1", roleIds: [], name: "rustfs", path: "/Users/cxymds/Documents/KAI/rustfs" })
+    ).resolves.toBe("Project registered: rustfs -> /Users/cxymds/Documents/KAI/rustfs");
+    await expect(handlers.handleProjectListCommand({ userId: "u1", roleIds: [] })).resolves.toContain("console -> /Users/cxymds/Documents/KAI/console");
+    await expect(handlers.handleProjectRemoveCommand({ userId: "u1", roleIds: [], name: "rustfs" })).resolves.toBe("Project removed: rustfs");
+  });
+
   it("rejects missing Discord project paths before creating a thread", async () => {
     const createThread = vi.fn(async () => ({ id: "thread1", name: "Hello" }));
     const handlers = createBridgeHandlers({
@@ -70,7 +155,7 @@ describe("createBridgeHandlers", () => {
         allowedRoleIds: [],
         workspacePath: "/Users/cxymds/Documents/KAI"
       },
-      store: {} as never,
+      store: { findProjectByName: vi.fn(() => null) } as never,
       codex: {} as never,
       queue: {} as never,
       discord: { createThread, postMessage: vi.fn() },
@@ -250,5 +335,16 @@ describe("isConfiguredCommandChannel", () => {
 
     expect(isConfiguredCommandChannel(config, "channel")).toBe(true);
     expect(isConfiguredCommandChannel(config, "other")).toBe(false);
+  });
+});
+
+describe("buildSlashCommands", () => {
+  it("marks the new project option as autocomplete and includes project management commands", () => {
+    const command = buildSlashCommands()[0] as { options: Array<{ name: string; options?: Array<{ name: string; autocomplete?: boolean; type?: number }> }> };
+    const newCommand = command.options.find((option) => option.name === "new")!;
+    const projectGroup = command.options.find((option) => option.name === "project")!;
+
+    expect(newCommand.options?.find((option) => option.name === "project")?.autocomplete).toBe(true);
+    expect(projectGroup.options?.map((option) => option.name)).toEqual(["add", "list", "remove"]);
   });
 });

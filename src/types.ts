@@ -26,6 +26,19 @@ export interface BridgeEvent {
   createdAt: string;
 }
 
+export interface RegisteredProject {
+  name: string;
+  path: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ProjectChoice {
+  name: string;
+  path: string;
+  source: "registered" | "codex";
+}
+
 export interface CodexRunResult {
   sessionId: string | null;
   finalMessage: string;

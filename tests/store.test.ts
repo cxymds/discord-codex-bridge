@@ -96,4 +96,18 @@ describe("store", () => {
     expect(store.listMappedSessions().map((item) => item.id)).toEqual([session.id]);
     expect(store.listEventsBySessionId(session.id).map((event) => event.payload)).toEqual([{ content: "hello" }]);
   });
+
+  it("registers, lists, finds, and removes project aliases", () => {
+    const store = testStore();
+
+    store.upsertProject({ name: "rustfs", path: "/Users/cxymds/Documents/KAI/rustfs" });
+    store.upsertProject({ name: "console", path: "/Users/cxymds/Documents/KAI/console" });
+    store.upsertProject({ name: "rustfs", path: "/Users/cxymds/Documents/KAI/rustfs-new" });
+
+    expect(store.findProjectByName("rustfs")?.path).toBe("/Users/cxymds/Documents/KAI/rustfs-new");
+    expect(store.listProjects().map((project) => project.name)).toEqual(["console", "rustfs"]);
+    expect(store.removeProject("rustfs")).toBe(true);
+    expect(store.findProjectByName("rustfs")).toBeNull();
+    expect(store.removeProject("rustfs")).toBe(false);
+  });
 });

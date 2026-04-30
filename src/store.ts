@@ -2,7 +2,7 @@ import Database from "better-sqlite3";
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { nanoid } from "nanoid";
-import type { BridgeEvent, BridgeSession, EventKind, EventSource, SessionStatus } from "./types.js";
+import type { BridgeEvent, BridgeSession, EventKind, EventSource, RegisteredProject, SessionStatus } from "./types.js";
 
 interface CreateSessionInput {
   codexSessionId: string | null;
@@ -18,6 +18,11 @@ interface RecordEventInput {
   source: EventSource;
   kind: EventKind;
   payload: unknown;
+}
+
+interface UpsertProjectInput {
+  name: string;
+  path: string;
 }
 
 function nowIso(): string {
@@ -53,6 +58,16 @@ function toEvent(row: Record<string, unknown>): BridgeEvent {
   };
 }
 
+function toProject(row: Record<string, unknown> | undefined): RegisteredProject | null {
+  if (!row) return null;
+  return {
+    name: String(row.name),
+    path: String(row.path),
+    createdAt: String(row.created_at),
+    updatedAt: String(row.updated_at)
+  };
+}
+
 export function createStore(dbPath: string) {
   if (dbPath !== ":memory:") {
     mkdirSync(dirname(dbPath), { recursive: true });
@@ -84,6 +99,13 @@ export function createStore(dbPath: string) {
       payload_json TEXT NOT NULL,
       created_at TEXT NOT NULL,
       FOREIGN KEY(session_id) REFERENCES sessions(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS projects (
+      name TEXT PRIMARY KEY,
+      path TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     );
   `);
 
@@ -170,6 +192,29 @@ export function createStore(dbPath: string) {
 
     listEventsBySessionId(sessionId: string): BridgeEvent[] {
       return (db.prepare("SELECT * FROM events WHERE session_id = ? ORDER BY id ASC").all(sessionId) as Array<Record<string, unknown>>).map(toEvent);
+    },
+
+    upsertProject(input: UpsertProjectInput): RegisteredProject {
+      const timestamp = nowIso();
+      db.prepare(`
+        INSERT INTO projects (name, path, created_at, updated_at)
+        VALUES (?, ?, ?, ?)
+        ON CONFLICT(name) DO UPDATE SET path = excluded.path, updated_at = excluded.updated_at
+      `).run(input.name, input.path, timestamp, timestamp);
+      return this.findProjectByName(input.name)!;
+    },
+
+    findProjectByName(name: string): RegisteredProject | null {
+      return toProject(db.prepare("SELECT * FROM projects WHERE name = ?").get(name) as Record<string, unknown> | undefined);
+    },
+
+    listProjects(): RegisteredProject[] {
+      return (db.prepare("SELECT * FROM projects ORDER BY name ASC").all() as Array<Record<string, unknown>>).map((row) => toProject(row)!);
+    },
+
+    removeProject(name: string): boolean {
+      const result = db.prepare("DELETE FROM projects WHERE name = ?").run(name);
+      return result.changes > 0;
     },
 
     close(): void {

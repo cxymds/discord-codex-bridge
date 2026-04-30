@@ -3,6 +3,9 @@
 把 Discord 频道和本机 Codex CLI 会话连接起来的桥接服务。启动后，Bot 会在指定 Discord 频道注册 `/codex` 指令：
 
 - `/codex new project:<本机项目路径> prompt:<初始任务>`：创建一个 Discord 线程，并在对应项目目录中启动 Codex。
+- `/codex project add name:<名称> path:<本机项目路径>`：登记项目名称，后续 `/codex new` 可以直接选择或输入该名称。
+- `/codex project list`：查看已登记项目。
+- `/codex project remove name:<名称>`：删除已登记项目。
 - 在线程中继续发消息：续接同一个 Codex 会话。
 - `/codex status`：查看当前线程映射的桥接会话状态。
 - `/codex done`：让 Codex 总结并关闭当前线程会话。
@@ -179,13 +182,19 @@ Discord-Codex bridge running. Notify endpoint: http://127.0.0.1:43765/notify/tur
 /codex new project:/Users/你的用户名/Documents/your-project prompt:你好，确认桥接可用
 ```
 
-如果已经设置 `BRIDGE_WORKSPACE_PATH`，也可以只写项目目录名：
+也可以先登记项目名称：
+
+```text
+/codex project add name:rustfs path:/Users/你的用户名/Documents/KAI/rustfs
+```
+
+登记后，`/codex new` 的 `project` 输入框会出现 autocomplete 候选，可以选择 `rustfs`。如果已经设置 `BRIDGE_WORKSPACE_PATH`，也可以只写项目目录名：
 
 ```text
 /codex new project:your-project prompt:你好，确认桥接可用
 ```
 
-Bot 会先检查项目路径是否存在，再创建线程。Codex 的回复会出现在该线程中。之后直接在线程内发消息即可继续同一个 Codex 会话。
+Bot 会按以下顺序解析 `project`：已登记项目名称、Codex 历史会话中唯一同名项目、绝对路径、`BRIDGE_WORKSPACE_PATH` 下的相对路径。解析完成后会先检查项目路径是否存在，再创建线程。Codex 的回复会出现在该线程中。之后直接在线程内发消息即可继续同一个 Codex 会话。
 
 注意：Discord 线程内的后续消息当前通过 `codex exec resume` 执行，并把结果写回同一个 Codex 会话文件。这个路径会让 Codex 执行并把最终结果发回 Discord，但它不是 Codex Desktop 窗口的实时输入通道；如果同一个会话正打开在 Desktop 中，Desktop 可能不会把外部 CLI turn 按实时聊天顺序展示。等本机 Codex app-server control socket 可用后，bridge 才能切换到 `thread/resume` + `turn/start` 这种更接近 Desktop 的实时同步方式。
 
@@ -220,6 +229,7 @@ DISCORD_PROXY_URL=http://127.0.0.1:7897
 
 - `At least one Discord allowed user id or role id is required`：`DISCORD_ALLOWED_USER_IDS` 和 `DISCORD_ALLOWED_ROLE_IDS` 都为空，至少填一个。
 - `/codex new` 不出现：确认 Bot 邀请链接包含 `applications.commands` scope，且服务已成功启动并注册 guild command。
+- `/codex new` 的项目候选不出现：确认服务已重启并重新注册 slash command；Discord guild command 可能需要几十秒刷新。
 - 在线程里发消息没有反应：确认 `Message Content Intent` 已开启，且用户 ID 或角色 ID 在 allowlist 中。
 - `Project path does not exist`：如果 `/codex new project:rustfs` 使用的是项目名而不是绝对路径，请确认 `.env` 中的 `BRIDGE_WORKSPACE_PATH` 指向包含 `rustfs` 的父目录。
 - `Codex exited with code ...`：确认 `CODEX_BIN` 可执行，`project` 路径存在，并且 Codex app 已完成登录/授权。
