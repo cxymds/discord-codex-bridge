@@ -47,7 +47,7 @@ const store = createStore(config.dbPath);
 const codex = createCodexClient({
   codexBin: config.codexBin,
   codexHome: config.codexHome,
-  cwd: process.cwd()
+  cwd: config.workspacePath
 });
 const queue = new SessionQueue();
 const sessionIndexPath = codexSessionIndexPath(config.codexHome);

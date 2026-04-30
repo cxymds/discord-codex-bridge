@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { basename, resolve } from "node:path";
 
 const envSchema = z.object({
   DISCORD_TOKEN: z.string().min(1),
@@ -8,7 +9,8 @@ const envSchema = z.object({
   DISCORD_ALLOWED_USER_IDS: z.string().default(""),
   DISCORD_ALLOWED_ROLE_IDS: z.string().default(""),
   DISCORD_PROXY_URL: z.string().optional(),
-  BRIDGE_PROJECT_NAME: z.string().default("discord-codex-bridge"),
+  BRIDGE_WORKSPACE_PATH: z.string().default(process.cwd()),
+  BRIDGE_PROJECT_NAME: z.string().optional(),
   CODEX_BIN: z.string().default("/Applications/Codex.app/Contents/Resources/codex"),
   CODEX_HOME: z.string().default(`${process.env.HOME ?? ""}/.codex`),
   BRIDGE_DB_PATH: z.string().default("./data/bridge.sqlite"),
@@ -19,6 +21,7 @@ const envSchema = z.object({
 
 export interface BridgeConfig {
   projectName: string;
+  workspacePath: string;
   discordToken: string;
   discordApplicationId: string;
   discordGuildId: string;
@@ -45,6 +48,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): BridgeC
   const parsed = envSchema.parse(env);
   const allowedUserIds = splitCsv(parsed.DISCORD_ALLOWED_USER_IDS);
   const allowedRoleIds = splitCsv(parsed.DISCORD_ALLOWED_ROLE_IDS);
+  const workspacePath = resolve(parsed.BRIDGE_WORKSPACE_PATH);
+  const projectName = parsed.BRIDGE_PROJECT_NAME?.trim() || basename(workspacePath);
 
   if (allowedUserIds.length === 0 && allowedRoleIds.length === 0) {
     throw new Error("At least one Discord allowed user id or role id is required");
@@ -52,7 +57,8 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): BridgeC
 
   return {
     discordToken: parsed.DISCORD_TOKEN,
-    projectName: parsed.BRIDGE_PROJECT_NAME,
+    projectName,
+    workspacePath,
     discordApplicationId: parsed.DISCORD_APPLICATION_ID,
     discordGuildId: parsed.DISCORD_GUILD_ID,
     discordChannelId: parsed.DISCORD_CHANNEL_ID,
