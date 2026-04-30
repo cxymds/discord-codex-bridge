@@ -8,6 +8,7 @@ export interface BridgeSession {
   discordGuildId: string;
   discordChannelId: string;
   discordThreadId: string;
+  projectPath: string | null;
   title: string;
   status: SessionStatus;
   createdAt: string;

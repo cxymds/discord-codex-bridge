@@ -13,6 +13,7 @@ import { extractNotifyFields } from "./notifyPayload.js";
 import {
   codexSessionIndexPath,
   createCodexSessionIndexPoller,
+  findCodexSessionPath,
   findCodexSessionIndexEntry,
   syncCodexSessionToDiscord
 } from "./sessionSync.js";
@@ -47,7 +48,7 @@ const store = createStore(config.dbPath);
 const codex = createCodexClient({
   codexBin: config.codexBin,
   codexHome: config.codexHome,
-  cwd: config.workspacePath
+  cwd: process.cwd()
 });
 const queue = new SessionQueue();
 const sessionIndexPath = codexSessionIndexPath(config.codexHome);
@@ -77,7 +78,7 @@ const handlers = createBridgeHandlers({ config, store, codex, queue, discord: di
 client = createDiscordClient(config, handlers);
 const sessionIndexPoller = createCodexSessionIndexPoller({
   indexPath: sessionIndexPath,
-  projectName: config.projectName,
+  codexHome: config.codexHome,
   discordGuildId: config.discordGuildId,
   discordChannelId: config.discordChannelId,
   store,
@@ -95,7 +96,7 @@ const notifyServer = await startNotifyServer({
             id: fields.codexSessionId,
             threadName: "Codex session"
           },
-          projectName: config.projectName,
+          sessionPath: findCodexSessionPath(config.codexHome, fields.codexSessionId),
           discordGuildId: config.discordGuildId,
           discordChannelId: config.discordChannelId,
           store,

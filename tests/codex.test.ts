@@ -25,6 +25,23 @@ describe("createCodexClient", () => {
     );
   });
 
+  it("can start a session in a specific project directory", async () => {
+    const runner: ProcessRunner = vi.fn(async () => ({
+      code: 0,
+      stdout: JSON.stringify({ type: "agent_message", message: "done" }),
+      stderr: ""
+    }));
+
+    const client = createCodexClient({ codexBin: "/codex", codexHome: "/home/.codex", cwd: "/bridge", runner });
+    await client.startInProject("/Users/cxymds/Documents/KAI/rustfs", "hello");
+
+    expect(runner).toHaveBeenCalledWith(
+      "/codex",
+      ["exec", "--json", "hello"],
+      expect.objectContaining({ cwd: "/Users/cxymds/Documents/KAI/rustfs" })
+    );
+  });
+
   it("uses exec resume for follow-up turns", async () => {
     const runner: ProcessRunner = vi.fn(async () => ({
       code: 0,

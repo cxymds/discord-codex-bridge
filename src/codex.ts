@@ -72,8 +72,8 @@ export function createCodexClient(options: CodexClientOptions) {
   const runner = options.runner ?? defaultRunner;
   const baseEnv = { ...process.env, CODEX_HOME: options.codexHome };
 
-  async function run(args: string[]): Promise<CodexRunResult> {
-    const result = await runner(options.codexBin, args, { cwd: options.cwd, env: baseEnv });
+  async function run(args: string[], cwd = options.cwd): Promise<CodexRunResult> {
+    const result = await runner(options.codexBin, args, { cwd, env: baseEnv });
     if (result.code !== 0) {
       throw new Error(`Codex exited with code ${result.code}: ${result.stderr || result.stdout}`);
     }
@@ -89,6 +89,10 @@ export function createCodexClient(options: CodexClientOptions) {
   return {
     start(prompt: string): Promise<CodexRunResult> {
       return run(["exec", "--json", prompt]);
+    },
+
+    startInProject(projectPath: string, prompt: string): Promise<CodexRunResult> {
+      return run(["exec", "--json", prompt], projectPath);
     },
 
     resume(sessionId: string, prompt: string): Promise<CodexRunResult> {

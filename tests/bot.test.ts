@@ -12,32 +12,32 @@ describe("createBridgeHandlers", () => {
       markTurn: vi.fn(),
       recordEvent: vi.fn()
     };
-    const codex = { start: vi.fn(async () => ({ sessionId: "codex1", finalMessage: "done", rawEvents: [] })) };
+    const codex = { startInProject: vi.fn(async () => ({ sessionId: "codex1", finalMessage: "done", rawEvents: [] })) };
     const handlers = createBridgeHandlers({
-      config: { projectName: "discord-codex-bridge", discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
       store: store as never,
       codex: codex as never,
       queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
       discord: { createThread, postMessage }
     });
 
-    await handlers.handleNewCommand({ userId: "u1", roleIds: [], prompt: "Hello" });
+    await handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "/Users/cxymds/Documents/KAI/rustfs", prompt: "Hello" });
 
-    expect(createThread).toHaveBeenCalledWith("channel", "[discord-codex-bridge] Hello");
-    expect(codex.start).toHaveBeenCalledWith("Hello");
+    expect(createThread).toHaveBeenCalledWith("channel", "[rustfs] Hello");
+    expect(codex.startInProject).toHaveBeenCalledWith("/Users/cxymds/Documents/KAI/rustfs", "Hello");
     expect(postMessage).toHaveBeenCalledWith("thread1", "done");
   });
 
   it("denies unauthorized users", async () => {
     const handlers = createBridgeHandlers({
-      config: { projectName: "discord-codex-bridge", discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
       store: {} as never,
       codex: {} as never,
       queue: {} as never,
       discord: { createThread: vi.fn(), postMessage: vi.fn() }
     });
 
-    await expect(handlers.handleNewCommand({ userId: "u2", roleIds: [], prompt: "Hello" })).rejects.toThrow("Not authorized");
+    await expect(handlers.handleNewCommand({ userId: "u2", roleIds: [], project: "/work", prompt: "Hello" })).rejects.toThrow("Not authorized");
   });
 
   it("reports status for a mapped thread", async () => {
@@ -57,7 +57,7 @@ describe("createBridgeHandlers", () => {
       }))
     };
     const handlers = createBridgeHandlers({
-      config: { projectName: "discord-codex-bridge", discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
       store: store as never,
       codex: {} as never,
       queue: { pendingCount: vi.fn(() => 2) } as never,
@@ -78,14 +78,14 @@ describe("createBridgeHandlers", () => {
       recordEvent: vi.fn()
     };
     const handlers = createBridgeHandlers({
-      config: { projectName: "discord-codex-bridge", discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
       store: store as never,
-      codex: { start: vi.fn(async () => { throw error; }) } as never,
+      codex: { startInProject: vi.fn(async () => { throw error; }) } as never,
       queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
       discord: { createThread: vi.fn(async () => ({ id: "thread1", name: "Hello" })), postMessage }
     });
 
-    await expect(handlers.handleNewCommand({ userId: "u1", roleIds: [], prompt: "Hello" })).rejects.toThrow("Codex exploded");
+    await expect(handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "/work", prompt: "Hello" })).rejects.toThrow("Codex exploded");
 
     expect(store.updateSessionStatus).toHaveBeenNthCalledWith(1, "bridge1", "running");
     expect(store.updateSessionStatus).toHaveBeenNthCalledWith(2, "bridge1", "error");
@@ -120,7 +120,7 @@ describe("createBridgeHandlers", () => {
       recordEvent: vi.fn()
     };
     const handlers = createBridgeHandlers({
-      config: { projectName: "discord-codex-bridge", discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
       store: store as never,
       codex: { resume: vi.fn(async () => { throw error; }) } as never,
       queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,

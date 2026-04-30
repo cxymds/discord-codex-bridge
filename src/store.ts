@@ -9,6 +9,7 @@ interface CreateSessionInput {
   discordGuildId: string;
   discordChannelId: string;
   discordThreadId: string;
+  projectPath: string | null;
   title: string;
 }
 
@@ -31,6 +32,7 @@ function toSession(row: Record<string, unknown> | undefined): BridgeSession | nu
     discordGuildId: String(row.discord_guild_id),
     discordChannelId: String(row.discord_channel_id),
     discordThreadId: String(row.discord_thread_id),
+    projectPath: row.project_path === null ? null : String(row.project_path),
     title: String(row.title),
     status: row.status as SessionStatus,
     createdAt: String(row.created_at),
@@ -65,6 +67,7 @@ export function createStore(dbPath: string) {
       discord_guild_id TEXT NOT NULL,
       discord_channel_id TEXT NOT NULL,
       discord_thread_id TEXT NOT NULL UNIQUE,
+      project_path TEXT,
       title TEXT NOT NULL,
       status TEXT NOT NULL,
       created_at TEXT NOT NULL,
@@ -84,6 +87,11 @@ export function createStore(dbPath: string) {
     );
   `);
 
+  const columns = db.prepare("PRAGMA table_info(sessions)").all() as Array<{ name: string }>;
+  if (!columns.some((column) => column.name === "project_path")) {
+    db.prepare("ALTER TABLE sessions ADD COLUMN project_path TEXT").run();
+  }
+
   return {
     createSession(input: CreateSessionInput): BridgeSession {
       const timestamp = nowIso();
@@ -91,15 +99,16 @@ export function createStore(dbPath: string) {
       db.prepare(`
         INSERT INTO sessions (
           id, codex_session_id, discord_guild_id, discord_channel_id, discord_thread_id,
-          title, status, created_at, updated_at, last_turn_at, closed_at
+          project_path, title, status, created_at, updated_at, last_turn_at, closed_at
         )
-        VALUES (?, ?, ?, ?, ?, ?, 'active', ?, ?, NULL, NULL)
+        VALUES (?, ?, ?, ?, ?, ?, ?, 'active', ?, ?, NULL, NULL)
       `).run(
         id,
         input.codexSessionId,
         input.discordGuildId,
         input.discordChannelId,
         input.discordThreadId,
+        input.projectPath,
         input.title,
         timestamp,
         timestamp

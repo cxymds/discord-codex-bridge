@@ -8,6 +8,7 @@ import {
   type ChatInputCommandInteraction,
   type Message
 } from "discord.js";
+import { basename, resolve } from "node:path";
 import { isAuthorized } from "./authz.js";
 import { chunkDiscordMessage, makeProjectThreadTitle } from "./format.js";
 import type { BridgeConfig } from "./config.js";
@@ -19,7 +20,6 @@ type Store = ReturnType<typeof createStore>;
 type CodexClient = ReturnType<typeof createCodexClient>;
 
 interface MinimalConfig {
-  projectName: string;
   discordGuildId: string;
   discordChannelId: string;
   allowedUserIds: string[];
@@ -60,23 +60,25 @@ export function createBridgeHandlers(deps: HandlerDeps) {
   }
 
   return {
-    async handleNewCommand(input: { userId: string; roleIds: string[]; prompt: string }) {
+    async handleNewCommand(input: { userId: string; roleIds: string[]; project: string; prompt: string }) {
       assertAuthorized(input.userId, input.roleIds);
-      const title = makeProjectThreadTitle(deps.config.projectName, input.prompt);
+      const projectPath = resolve(input.project);
+      const title = makeProjectThreadTitle(basename(projectPath), input.prompt);
       const thread = await deps.discord.createThread(deps.config.discordChannelId, title);
       const session = deps.store.createSession({
         codexSessionId: null,
         discordGuildId: deps.config.discordGuildId,
         discordChannelId: deps.config.discordChannelId,
         discordThreadId: thread.id,
+        projectPath,
         title
       });
 
-      deps.store.recordEvent({ sessionId: session.id, source: "discord", kind: "new", payload: { prompt: input.prompt } });
+      deps.store.recordEvent({ sessionId: session.id, source: "discord", kind: "new", payload: { project: projectPath, prompt: input.prompt } });
       await deps.queue.enqueue(session.id, async () => {
         deps.store.updateSessionStatus(session.id, "running");
         try {
-          const result = await deps.codex.start(input.prompt);
+          const result = await deps.codex.startInProject(projectPath, input.prompt);
           if (result.sessionId) deps.store.setCodexSessionId(session.id, result.sessionId);
           deps.store.markTurn(session.id);
           deps.store.updateSessionStatus(session.id, "active");
@@ -156,6 +158,7 @@ export function buildSlashCommands() {
         sub
           .setName("new")
           .setDescription("Create a new Codex session")
+          .addStringOption((option) => option.setName("project").setDescription("Project path for this Codex session").setRequired(true))
           .addStringOption((option) => option.setName("prompt").setDescription("Initial prompt").setRequired(true))
       )
       .addSubcommand((sub) => sub.setName("done").setDescription("Close this Codex session with a final summary"))
@@ -222,6 +225,7 @@ export function createDiscordClient(config: BridgeConfig, handlers: ReturnType<t
         await handlers.handleNewCommand({
           userId: interaction.user.id,
           roleIds: roleIdsFromInteraction(interaction),
+          project: interaction.options.getString("project", true),
           prompt: interaction.options.getString("prompt", true)
         });
         await interaction.editReply("Codex thread created.");

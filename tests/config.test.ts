@@ -10,7 +10,6 @@ describe("loadConfigFromEnv", () => {
     DISCORD_ALLOWED_USER_IDS: "u1,u2",
     DISCORD_ALLOWED_ROLE_IDS: "",
     DISCORD_PROXY_URL: "http://127.0.0.1:7897",
-    BRIDGE_WORKSPACE_PATH: "/Users/cxymds/Documents/My App",
     CODEX_BIN: "/Applications/Codex.app/Contents/Resources/codex",
     CODEX_HOME: "/Users/cxymds/.codex",
     BRIDGE_DB_PATH: "./data/bridge.sqlite",
@@ -23,18 +22,7 @@ describe("loadConfigFromEnv", () => {
     expect(config.allowedUserIds).toEqual(["u1", "u2"]);
     expect(config.allowedRoleIds).toEqual([]);
     expect(config.discordProxyUrl).toBe("http://127.0.0.1:7897");
-    expect(config.workspacePath).toBe("/Users/cxymds/Documents/My App");
-    expect(config.projectName).toBe("My App");
     expect(config.notifyPort).toBe(43765);
-  });
-
-  it("uses an explicit project name when provided", () => {
-    const config = loadConfigFromEnv({
-      ...validEnv,
-      BRIDGE_PROJECT_NAME: "Customer Portal"
-    });
-
-    expect(config.projectName).toBe("Customer Portal");
   });
 
   it("derives the public base URL from notify host and port when omitted", () => {

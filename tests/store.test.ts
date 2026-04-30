@@ -23,11 +23,13 @@ describe("store", () => {
       discordGuildId: "guild",
       discordChannelId: "channel",
       discordThreadId: "thread",
+      projectPath: "/Users/cxymds/Documents/KAI/rustfs",
       title: "Test session"
     });
 
     expect(store.findSessionByThreadId("thread")?.id).toBe(session.id);
     expect(store.findSessionByCodexSessionId("codex-1")?.id).toBe(session.id);
+    expect(store.findSessionByCodexSessionId("codex-1")?.projectPath).toBe("/Users/cxymds/Documents/KAI/rustfs");
   });
 
   it("finds pending Discord-created sessions by title", () => {
@@ -37,6 +39,7 @@ describe("store", () => {
       discordGuildId: "guild",
       discordChannelId: "channel",
       discordThreadId: "thread",
+      projectPath: "/Users/cxymds/Documents/KAI/rustfs",
       title: "[discord-codex-bridge] Pending"
     });
 
@@ -54,6 +57,7 @@ describe("store", () => {
       discordGuildId: "guild",
       discordChannelId: "channel",
       discordThreadId: "thread",
+      projectPath: null,
       title: "Test session"
     });
 
