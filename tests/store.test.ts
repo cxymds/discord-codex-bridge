@@ -30,6 +30,23 @@ describe("store", () => {
     expect(store.findSessionByCodexSessionId("codex-1")?.id).toBe(session.id);
   });
 
+  it("finds pending Discord-created sessions by title", () => {
+    const store = testStore();
+    const session = store.createSession({
+      codexSessionId: null,
+      discordGuildId: "guild",
+      discordChannelId: "channel",
+      discordThreadId: "thread",
+      title: "[discord-codex-bridge] Pending"
+    });
+
+    expect(store.findUnmappedSessionByTitle("[discord-codex-bridge] Pending")?.id).toBe(session.id);
+
+    store.setCodexSessionId(session.id, "codex-1");
+    expect(store.findUnmappedSessionByTitle("[discord-codex-bridge] Pending")).toBeNull();
+  });
+
+
   it("updates status and records close time", () => {
     const store = testStore();
     const session = store.createSession({

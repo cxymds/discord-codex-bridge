@@ -9,7 +9,7 @@ import {
   type Message
 } from "discord.js";
 import { isAuthorized } from "./authz.js";
-import { chunkDiscordMessage, makeThreadTitle } from "./format.js";
+import { chunkDiscordMessage, makeProjectThreadTitle } from "./format.js";
 import type { BridgeConfig } from "./config.js";
 import type { createCodexClient } from "./codex.js";
 import type { SessionQueue } from "./queue.js";
@@ -19,6 +19,7 @@ type Store = ReturnType<typeof createStore>;
 type CodexClient = ReturnType<typeof createCodexClient>;
 
 interface MinimalConfig {
+  projectName: string;
   discordGuildId: string;
   discordChannelId: string;
   allowedUserIds: string[];
@@ -61,7 +62,7 @@ export function createBridgeHandlers(deps: HandlerDeps) {
   return {
     async handleNewCommand(input: { userId: string; roleIds: string[]; prompt: string }) {
       assertAuthorized(input.userId, input.roleIds);
-      const title = makeThreadTitle(input.prompt);
+      const title = makeProjectThreadTitle(deps.config.projectName, input.prompt);
       const thread = await deps.discord.createThread(deps.config.discordChannelId, title);
       const session = deps.store.createSession({
         codexSessionId: null,

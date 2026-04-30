@@ -10,6 +10,12 @@ import { SessionQueue } from "./queue.js";
 import { startNotifyServer } from "./notify.js";
 import { chunkDiscordMessage } from "./format.js";
 import { extractNotifyFields } from "./notifyPayload.js";
+import {
+  codexSessionIndexPath,
+  createCodexSessionIndexPoller,
+  findCodexSessionIndexEntry,
+  syncCodexSessionToDiscord
+} from "./sessionSync.js";
 
 async function configureDiscordProxy(config: BridgeConfig) {
   if (!config.discordProxyUrl) {
@@ -44,6 +50,7 @@ const codex = createCodexClient({
   cwd: process.cwd()
 });
 const queue = new SessionQueue();
+const sessionIndexPath = codexSessionIndexPath(config.codexHome);
 
 let client: ReturnType<typeof createDiscordClient>;
 
@@ -68,13 +75,34 @@ const discordPort = {
 
 const handlers = createBridgeHandlers({ config, store, codex, queue, discord: discordPort });
 client = createDiscordClient(config, handlers);
+const sessionIndexPoller = createCodexSessionIndexPoller({
+  indexPath: sessionIndexPath,
+  projectName: config.projectName,
+  discordGuildId: config.discordGuildId,
+  discordChannelId: config.discordChannelId,
+  store,
+  discord: discordPort
+});
 
 const notifyServer = await startNotifyServer({
   host: config.notifyHost,
   port: config.notifyPort,
   onTurnEnded: async (payload) => {
     const fields = extractNotifyFields(payload);
-    const session = fields.codexSessionId ? store.findSessionByCodexSessionId(fields.codexSessionId) : null;
+    const session = fields.codexSessionId
+      ? await syncCodexSessionToDiscord({
+          entry: findCodexSessionIndexEntry(sessionIndexPath, fields.codexSessionId) ?? {
+            id: fields.codexSessionId,
+            threadName: "Codex session"
+          },
+          projectName: config.projectName,
+          discordGuildId: config.discordGuildId,
+          discordChannelId: config.discordChannelId,
+          store,
+          discord: discordPort,
+          claimPendingDiscordSession: true
+        })
+      : null;
     store.recordEvent({ sessionId: session?.id ?? null, source: "codex", kind: "turn_result", payload });
     if (session && fields.finalMessage) {
       store.markTurn(session.id);
@@ -87,10 +115,12 @@ const notifyServer = await startNotifyServer({
 
 await registerCommands(config);
 await client.login(config.discordToken);
+sessionIndexPoller.start();
 
 console.log(`Discord-Codex bridge running. Notify endpoint: ${notifyServer.url}/notify/turn-ended`);
 
 async function shutdown() {
+  sessionIndexPoller.stop();
   await notifyServer.close();
   client.destroy();
   store.close();

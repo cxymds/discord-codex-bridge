@@ -15,5 +15,11 @@ export function makeThreadTitle(prompt: string, maxLength = 90): string {
     return "Codex session";
   }
 
-  return cleaned.length > maxLength ? `${cleaned.slice(0, maxLength - 1)}...` : cleaned;
+  return cleaned.length > maxLength ? `${cleaned.slice(0, Math.max(0, maxLength - 3))}...` : cleaned;
+}
+
+export function makeProjectThreadTitle(projectName: string, sessionName: string, maxLength = 90): string {
+  const prefix = `[${projectName}] `;
+  const availableTitleLength = Math.max(3, maxLength - prefix.length);
+  return `${prefix}${makeThreadTitle(sessionName, availableTitleLength)}`;
 }

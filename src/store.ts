@@ -119,6 +119,14 @@ export function createStore(dbPath: string) {
       return toSession(db.prepare("SELECT * FROM sessions WHERE codex_session_id = ?").get(codexSessionId) as Record<string, unknown> | undefined);
     },
 
+    findUnmappedSessionByTitle(title: string): BridgeSession | null {
+      return toSession(
+        db.prepare("SELECT * FROM sessions WHERE codex_session_id IS NULL AND title = ? ORDER BY created_at DESC LIMIT 1").get(title) as
+          | Record<string, unknown>
+          | undefined
+      );
+    },
+
     setCodexSessionId(id: string, codexSessionId: string): void {
       db.prepare("UPDATE sessions SET codex_session_id = ?, updated_at = ? WHERE id = ?").run(codexSessionId, nowIso(), id);
     },

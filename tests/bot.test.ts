@@ -14,7 +14,7 @@ describe("createBridgeHandlers", () => {
     };
     const codex = { start: vi.fn(async () => ({ sessionId: "codex1", finalMessage: "done", rawEvents: [] })) };
     const handlers = createBridgeHandlers({
-      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { projectName: "discord-codex-bridge", discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
       store: store as never,
       codex: codex as never,
       queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
@@ -23,14 +23,14 @@ describe("createBridgeHandlers", () => {
 
     await handlers.handleNewCommand({ userId: "u1", roleIds: [], prompt: "Hello" });
 
-    expect(createThread).toHaveBeenCalledWith("channel", "Hello");
+    expect(createThread).toHaveBeenCalledWith("channel", "[discord-codex-bridge] Hello");
     expect(codex.start).toHaveBeenCalledWith("Hello");
     expect(postMessage).toHaveBeenCalledWith("thread1", "done");
   });
 
   it("denies unauthorized users", async () => {
     const handlers = createBridgeHandlers({
-      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { projectName: "discord-codex-bridge", discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
       store: {} as never,
       codex: {} as never,
       queue: {} as never,
@@ -57,7 +57,7 @@ describe("createBridgeHandlers", () => {
       }))
     };
     const handlers = createBridgeHandlers({
-      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { projectName: "discord-codex-bridge", discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
       store: store as never,
       codex: {} as never,
       queue: { pendingCount: vi.fn(() => 2) } as never,
@@ -78,7 +78,7 @@ describe("createBridgeHandlers", () => {
       recordEvent: vi.fn()
     };
     const handlers = createBridgeHandlers({
-      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { projectName: "discord-codex-bridge", discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
       store: store as never,
       codex: { start: vi.fn(async () => { throw error; }) } as never,
       queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
@@ -120,7 +120,7 @@ describe("createBridgeHandlers", () => {
       recordEvent: vi.fn()
     };
     const handlers = createBridgeHandlers({
-      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
+      config: { projectName: "discord-codex-bridge", discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [] },
       store: store as never,
       codex: { resume: vi.fn(async () => { throw error; }) } as never,
       queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,

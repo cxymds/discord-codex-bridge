@@ -8,6 +8,7 @@ const envSchema = z.object({
   DISCORD_ALLOWED_USER_IDS: z.string().default(""),
   DISCORD_ALLOWED_ROLE_IDS: z.string().default(""),
   DISCORD_PROXY_URL: z.string().optional(),
+  BRIDGE_PROJECT_NAME: z.string().default("discord-codex-bridge"),
   CODEX_BIN: z.string().default("/Applications/Codex.app/Contents/Resources/codex"),
   CODEX_HOME: z.string().default(`${process.env.HOME ?? ""}/.codex`),
   BRIDGE_DB_PATH: z.string().default("./data/bridge.sqlite"),
@@ -17,6 +18,7 @@ const envSchema = z.object({
 });
 
 export interface BridgeConfig {
+  projectName: string;
   discordToken: string;
   discordApplicationId: string;
   discordGuildId: string;
@@ -50,6 +52,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): BridgeC
 
   return {
     discordToken: parsed.DISCORD_TOKEN,
+    projectName: parsed.BRIDGE_PROJECT_NAME,
     discordApplicationId: parsed.DISCORD_APPLICATION_ID,
     discordGuildId: parsed.DISCORD_GUILD_ID,
     discordChannelId: parsed.DISCORD_CHANNEL_ID,
