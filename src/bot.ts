@@ -2,6 +2,7 @@ import {
   ChannelType,
   Client,
   GatewayIntentBits,
+  RESTJSONErrorCodes,
   REST,
   Routes,
   SlashCommandBuilder,
@@ -314,14 +315,22 @@ export function createDiscordClient(config: BridgeConfig, handlers: ReturnType<t
 
   client.on("interactionCreate", async (interaction) => {
     if (interaction.isAutocomplete() && interaction.commandName === "codex") {
+      let choices: Parameters<AutocompleteInteraction["respond"]>[0] = [];
       try {
         assertAutocompleteAuthorized(interaction, config);
         const focused = interaction.options.getFocused(true);
         if (focused.name === "project" || focused.name === "name") {
-          await interaction.respond(await handlers.handleProjectAutocomplete({ query: String(focused.value ?? "") }));
+          choices = await handlers.handleProjectAutocomplete({ query: String(focused.value ?? "") });
         }
-      } catch {
-        await interaction.respond([]);
+      } catch (error) {
+        if (isExpiredInteractionError(error)) return;
+        choices = [];
+      }
+
+      try {
+        await interaction.respond(choices);
+      } catch (error) {
+        if (!isExpiredInteractionError(error)) throw error;
       }
       return;
     }
@@ -412,4 +421,13 @@ function assertAutocompleteAuthorized(interaction: AutocompleteInteraction, conf
   if (!isAuthorized({ userId: interaction.user.id, roleIds: roleIdsFromAutocomplete(interaction) }, config.allowedUserIds, config.allowedRoleIds)) {
     throw new Error("Not authorized");
   }
+}
+
+function isExpiredInteractionError(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code?: unknown }).code === RESTJSONErrorCodes.UnknownInteraction
+  );
 }

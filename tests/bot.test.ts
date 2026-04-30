@@ -1,6 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import { ChannelType } from "discord.js";
-import { buildSlashCommands, createBridgeHandlers, isConfiguredCommandChannel, isSupportedThreadChannelType, roleIdsFromInteractionMember } from "../src/bot.js";
+import {
+  buildSlashCommands,
+  createBridgeHandlers,
+  createDiscordClient,
+  isConfiguredCommandChannel,
+  isSupportedThreadChannelType,
+  roleIdsFromInteractionMember
+} from "../src/bot.js";
 
 describe("createBridgeHandlers", () => {
   it("creates a session and posts the first Codex result", async () => {
@@ -345,6 +352,34 @@ describe("isSupportedThreadChannelType", () => {
     expect(isSupportedThreadChannelType(ChannelType.PrivateThread)).toBe(true);
     expect(isSupportedThreadChannelType(ChannelType.AnnouncementThread)).toBe(true);
     expect(isSupportedThreadChannelType(ChannelType.GuildText)).toBe(false);
+  });
+});
+
+describe("createDiscordClient", () => {
+  it("does not emit client errors when an autocomplete interaction expires before response", async () => {
+    const client = createDiscordClient(
+      { allowedUserIds: ["u1"], allowedRoleIds: [] } as never,
+      { handleProjectAutocomplete: vi.fn(async () => []) } as never
+    );
+    const clientError = vi.fn();
+    client.on("error", clientError);
+    const expiredInteraction = new Error("Unknown interaction") as Error & { code: number };
+    expiredInteraction.code = 10062;
+
+    client.emit("interactionCreate", {
+      isAutocomplete: () => true,
+      isChatInputCommand: () => false,
+      commandName: "codex",
+      user: { id: "u1" },
+      member: { roles: [] },
+      options: { getFocused: () => ({ name: "project", value: "rust" }) },
+      respond: vi.fn(async () => {
+        throw expiredInteraction;
+      })
+    } as never);
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(clientError).not.toHaveBeenCalled();
   });
 });
 
