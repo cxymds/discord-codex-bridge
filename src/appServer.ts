@@ -97,9 +97,13 @@ export function createAppServerCodexClient(options: AppServerCodexClientOptions)
 
     const rawEvents = parseJsonRpcLines(result.stdout);
     assertNoJsonRpcErrors(rawEvents);
+    const finalMessage = extractFinalAgentMessage(rawEvents);
+    if (finalMessage.length === 0) {
+      throw new Error("Codex Desktop app-server returned no final agent message");
+    }
     return {
       sessionId,
-      finalMessage: extractFinalAgentMessage(rawEvents),
+      finalMessage,
       rawEvents
     };
   }

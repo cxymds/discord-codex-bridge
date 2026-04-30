@@ -11,8 +11,7 @@ import { ensureAppServerProcess } from "./appServerProcess.js";
 import { createTurnDeliveryClient } from "./turnDelivery.js";
 import { SessionQueue } from "./queue.js";
 import { startNotifyServer } from "./notify.js";
-import { chunkDiscordMessage } from "./format.js";
-import { extractNotifyFields } from "./notifyPayload.js";
+import { handleNotifyTurnEnded } from "./notifyTurnEnded.js";
 import {
   codexSessionIndexPath,
   createCodexSessionIndexPoller,
@@ -123,28 +122,26 @@ const notifyServer = await startNotifyServer({
   host: config.notifyHost,
   port: config.notifyPort,
   onTurnEnded: async (payload) => {
-    const fields = extractNotifyFields(payload);
-    const session = fields.codexSessionId
-      ? await syncCodexSessionToDiscord({
-          entry: findCodexSessionIndexEntry(sessionIndexPath, fields.codexSessionId) ?? {
-            id: fields.codexSessionId,
-            threadName: "Codex session"
-          },
-          sessionPath: findCodexSessionPath(config.codexHome, fields.codexSessionId),
-          discordGuildId: config.discordGuildId,
-          discordChannelId: config.discordChannelId,
-          store,
-          discord: discordPort,
-          claimPendingDiscordSession: true
-        })
-      : null;
-    store.recordEvent({ sessionId: session?.id ?? null, source: "codex", kind: "turn_result", payload });
-    if (session && fields.finalMessage) {
-      store.markTurn(session.id);
-      for (const chunk of chunkDiscordMessage(fields.finalMessage)) {
-        await discordPort.postMessage(session.discordThreadId, chunk);
-      }
-    }
+    await handleNotifyTurnEnded({
+      payload,
+      resolveSession: (codexSessionId) =>
+        codexSessionId
+          ? syncCodexSessionToDiscord({
+              entry: findCodexSessionIndexEntry(sessionIndexPath, codexSessionId) ?? {
+                id: codexSessionId,
+                threadName: "Codex session"
+              },
+              sessionPath: findCodexSessionPath(config.codexHome, codexSessionId),
+              discordGuildId: config.discordGuildId,
+              discordChannelId: config.discordChannelId,
+              store,
+              discord: discordPort,
+              claimPendingDiscordSession: true
+            })
+          : Promise.resolve(null),
+      store,
+      discord: discordPort
+    });
   }
 });
 

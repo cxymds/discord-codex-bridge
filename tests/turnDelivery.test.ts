@@ -31,6 +31,27 @@ describe("createTurnDeliveryClient", () => {
     expect(onDesktopFailure).toHaveBeenCalledWith(desktopError);
   });
 
+  it("falls back to CLI delivery when Desktop returns no final agent message", async () => {
+    const desktopError = new Error("Codex Desktop app-server returned no final agent message");
+    const cli = {
+      resume: vi.fn(async () => result("cli")),
+      resumeInProject: vi.fn(async () => result("cli project"))
+    };
+    const desktop = {
+      resume: vi.fn(async () => {
+        throw desktopError;
+      }),
+      resumeInProject: vi.fn(async () => {
+        throw desktopError;
+      })
+    };
+
+    const client = createTurnDeliveryClient({ mode: "auto", cli, desktop });
+
+    await expect(client.resumeInProject("/work", "s1", "hello")).resolves.toMatchObject({ finalMessage: "cli project" });
+    expect(cli.resumeInProject).toHaveBeenCalledWith("/work", "s1", "hello");
+  });
+
   it("keeps Desktop delivery strict in desktop mode", async () => {
     const desktopError = new Error("missing socket");
     const cli = {

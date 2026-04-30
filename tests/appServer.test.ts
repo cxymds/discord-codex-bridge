@@ -76,6 +76,30 @@ describe("createAppServerCodexClient", () => {
       "Codex Desktop app-server proxy failed: failed to connect to socket"
     );
   });
+
+  it("rejects app-server turns that complete without a final agent message", async () => {
+    const runner: ProcessRunner = vi.fn(async () => ({
+      code: 0,
+      stderr: "",
+      stdout: [
+        JSON.stringify({ jsonrpc: "2.0", id: 1, result: { serverInfo: { name: "codex", version: "1" } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 2, result: { thread: { id: "thread1" } } }),
+        JSON.stringify({ jsonrpc: "2.0", id: 3, result: { turn: { id: "turn1", status: "inProgress" } } }),
+        JSON.stringify({ jsonrpc: "2.0", method: "turn/completed", params: { threadId: "thread1", turn: { id: "turn1", status: "completed" } } })
+      ].join("\n")
+    }));
+    const client = createAppServerCodexClient({
+      codexBin: "/codex",
+      codexHome: "/home/.codex",
+      socketPath: "/tmp/codex.sock",
+      cwd: "/bridge",
+      runner
+    });
+
+    await expect(client.resumeInProject("/work", "thread1", "Continue")).rejects.toThrow(
+      "Codex Desktop app-server returned no final agent message"
+    );
+  });
 });
 
 describe("defaultAppServerSocketPath", () => {
