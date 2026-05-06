@@ -5,6 +5,7 @@ interface CodexClientOptions {
   codexBin: string;
   codexHome: string;
   cwd: string;
+  fullAccess?: boolean;
   runner?: ProcessRunner;
 }
 
@@ -71,6 +72,7 @@ function extractFinalMessage(events: unknown[], stdout: string): string {
 export function createCodexClient(options: CodexClientOptions) {
   const runner = options.runner ?? defaultRunner;
   const baseEnv = { ...process.env, CODEX_HOME: options.codexHome };
+  const fullAccessArgs = options.fullAccess ? ["--dangerously-bypass-approvals-and-sandbox"] : [];
 
   async function run(args: string[], cwd = options.cwd): Promise<CodexRunResult> {
     let result: Awaited<ReturnType<ProcessRunner>>;
@@ -95,25 +97,26 @@ export function createCodexClient(options: CodexClientOptions) {
 
   return {
     start(prompt: string): Promise<CodexRunResult> {
-      return run(["exec", "--json", prompt]);
+      return run(["exec", ...fullAccessArgs, "--json", prompt]);
     },
 
     startInProject(projectPath: string, prompt: string): Promise<CodexRunResult> {
-      return run(["exec", "--json", prompt], projectPath);
+      return run(["exec", ...fullAccessArgs, "--json", prompt], projectPath);
     },
 
     resume(sessionId: string, prompt: string): Promise<CodexRunResult> {
-      return run(["exec", "resume", "--json", sessionId, prompt]);
+      return run(["exec", "resume", ...fullAccessArgs, "--json", sessionId, prompt]);
     },
 
     resumeInProject(projectPath: string, sessionId: string, prompt: string): Promise<CodexRunResult> {
-      return run(["exec", "resume", "--json", sessionId, prompt], projectPath);
+      return run(["exec", "resume", ...fullAccessArgs, "--json", sessionId, prompt], projectPath);
     },
 
     summarize(sessionId: string): Promise<CodexRunResult> {
       return run([
         "exec",
         "resume",
+        ...fullAccessArgs,
         "--json",
         sessionId,
         "请用中文简洁总结这个 Codex 会话的最终结果、关键改动、验证情况和后续建议。"

@@ -51,6 +51,7 @@ const store = createStore(config.dbPath);
 const codex = createCodexClient({
   codexBin: config.codexBin,
   codexHome: config.codexHome,
+  fullAccess: config.codexFullAccess,
   cwd: process.cwd()
 });
 const appServerSocketPath = config.codexAppServerSocket ?? defaultAppServerSocketPath(config.codexHome);

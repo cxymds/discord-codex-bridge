@@ -42,6 +42,29 @@ describe("createCodexClient", () => {
     );
   });
 
+  it("can run sessions with full access when enabled", async () => {
+    const runner: ProcessRunner = vi.fn(async () => ({
+      code: 0,
+      stdout: JSON.stringify({ type: "agent_message", message: "done" }),
+      stderr: ""
+    }));
+
+    const client = createCodexClient({
+      codexBin: "/codex",
+      codexHome: "/home/.codex",
+      cwd: "/work",
+      fullAccess: true,
+      runner
+    });
+    await client.start("hello");
+
+    expect(runner).toHaveBeenCalledWith(
+      "/codex",
+      ["exec", "--dangerously-bypass-approvals-and-sandbox", "--json", "hello"],
+      expect.anything()
+    );
+  });
+
   it("uses exec resume for follow-up turns", async () => {
     const runner: ProcessRunner = vi.fn(async () => ({
       code: 0,
@@ -54,6 +77,29 @@ describe("createCodexClient", () => {
 
     expect(result.finalMessage).toBe("continued");
     expect(runner).toHaveBeenCalledWith("/codex", ["exec", "resume", "--json", "s1", "continue"], expect.anything());
+  });
+
+  it("can resume sessions with full access when enabled", async () => {
+    const runner: ProcessRunner = vi.fn(async () => ({
+      code: 0,
+      stdout: JSON.stringify({ type: "message", content: "continued" }),
+      stderr: ""
+    }));
+
+    const client = createCodexClient({
+      codexBin: "/codex",
+      codexHome: "/home/.codex",
+      cwd: "/work",
+      fullAccess: true,
+      runner
+    });
+    await client.resume("s1", "continue");
+
+    expect(runner).toHaveBeenCalledWith(
+      "/codex",
+      ["exec", "resume", "--dangerously-bypass-approvals-and-sandbox", "--json", "s1", "continue"],
+      expect.anything()
+    );
   });
 
   it("can resume a session in its project directory", async () => {

@@ -11,6 +11,10 @@ const envSchema = z.object({
   CODEX_BIN: z.string().default("/Applications/Codex.app/Contents/Resources/codex"),
   CODEX_HOME: z.string().default(`${process.env.HOME ?? ""}/.codex`),
   CODEX_TURN_DELIVERY: z.enum(["cli", "desktop", "auto"]).default("auto"),
+  CODEX_FULL_ACCESS: z
+    .enum(["true", "false", "1", "0", "yes", "no", "on", "off"])
+    .default("false")
+    .transform((value) => ["true", "1", "yes", "on"].includes(value)),
   CODEX_APP_SERVER_SOCKET: z.string().optional(),
   CODEX_APP_SERVER_AUTO_START: z
     .enum(["true", "false", "1", "0", "yes", "no", "on", "off"])
@@ -34,6 +38,7 @@ export interface BridgeConfig {
   codexBin: string;
   codexHome: string;
   codexTurnDelivery: "cli" | "desktop" | "auto";
+  codexFullAccess: boolean;
   codexAppServerSocket: string | null;
   codexAppServerAutoStart: boolean;
   workspacePath: string | null;
@@ -70,6 +75,7 @@ export function loadConfigFromEnv(env: NodeJS.ProcessEnv = process.env): BridgeC
     codexBin: parsed.CODEX_BIN,
     codexHome: parsed.CODEX_HOME,
     codexTurnDelivery: parsed.CODEX_TURN_DELIVERY,
+    codexFullAccess: parsed.CODEX_FULL_ACCESS,
     codexAppServerSocket: parsed.CODEX_APP_SERVER_SOCKET ?? null,
     codexAppServerAutoStart: parsed.CODEX_APP_SERVER_AUTO_START,
     workspacePath: parsed.BRIDGE_WORKSPACE_PATH ?? null,

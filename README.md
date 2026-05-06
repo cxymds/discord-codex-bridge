@@ -101,6 +101,7 @@ DISCORD_PROXY_URL=
 CODEX_BIN=/Applications/Codex.app/Contents/Resources/codex
 CODEX_HOME=/Users/cxymds/.codex
 CODEX_TURN_DELIVERY=auto
+CODEX_FULL_ACCESS=false
 CODEX_APP_SERVER_SOCKET=/Users/cxymds/.codex/app-server-control/app-server-control.sock
 CODEX_APP_SERVER_AUTO_START=false
 BRIDGE_WORKSPACE_PATH=/Users/你的用户名/Documents
@@ -124,6 +125,7 @@ BRIDGE_PUBLIC_BASE_URL=http://127.0.0.1:43765
 | `CODEX_BIN` | 否 | Codex CLI 路径，默认 `/Applications/Codex.app/Contents/Resources/codex`。 |
 | `CODEX_HOME` | 否 | Codex 配置和会话目录，默认 `~/.codex`。 |
 | `CODEX_TURN_DELIVERY` | 否 | Discord 线程回复的投递方式，`auto` 会优先写入 Codex Desktop UI，失败时回退到 `codex exec resume`；`desktop` 严格要求 Desktop app-server；`cli` 只使用旧的 CLI resume。默认 `auto`。 |
+| `CODEX_FULL_ACCESS` | 否 | 设为 `true` 时，bridge 启动的 Codex CLI 会话会附加 `--dangerously-bypass-approvals-and-sandbox`，跳过审批和沙箱。只应在 Discord Bot 仅允许可信用户使用时开启。默认 `false`。 |
 | `CODEX_APP_SERVER_SOCKET` | 否 | Codex Desktop app-server control socket 路径，默认 `CODEX_HOME/app-server-control/app-server-control.sock`。 |
 | `CODEX_APP_SERVER_AUTO_START` | 否 | 是否由 bridge 启动本机 Codex app-server control socket。设为 `true` 时，`CODEX_TURN_DELIVERY=auto` 或 `desktop` 且 socket 不存在会自动运行 `codex app-server --listen unix://...`。默认 `false`。 |
 | `BRIDGE_WORKSPACE_PATH` | 否 | Discord 中 `/codex new project:<项目名>` 的相对路径根目录。例如设为 `/Users/你/Documents/KAI` 后，`project:rustfs` 会解析为 `/Users/你/Documents/KAI/rustfs`。不设置时相对路径会基于 bridge 进程当前目录解析。 |
@@ -203,6 +205,14 @@ Discord-Codex bridge running. Notify endpoint: http://127.0.0.1:43765/notify/tur
 Bot 会按以下顺序解析 `project`：已登记项目名称、Codex 历史会话中唯一同名项目、绝对路径、`BRIDGE_WORKSPACE_PATH` 下的相对路径。解析完成后会先检查项目路径是否存在，再创建线程。Codex 的回复会出现在该线程中。之后直接在线程内发消息即可继续同一个 Codex 会话。
 
 默认情况下，Discord 线程内的后续消息会先尝试通过 Codex Desktop app-server 的 `thread/resume` + `turn/start` 投递到 Desktop UI。这样同一个会话打开在 Codex Desktop 中时，Discord 消息会作为新的用户输入进入界面并启动请求。如果本机 Codex Desktop 没有开放 app-server control socket，bridge 会自动回退到旧的 `codex exec resume`，保证 Discord 线程仍能收到最终回复。若希望严格要求 Desktop UI 同步，可以设置 `CODEX_TURN_DELIVERY=desktop`。如果希望 bridge 启动时自动创建本机 control socket，可以同时设置 `CODEX_APP_SERVER_AUTO_START=true`；bridge 会复用已存在的 socket，不会重复启动 app-server。
+
+如果 Discord 发起的 Codex CLI 会话在 `git push`、跨目录写入或需要网络/系统权限的命令上报权限不足，可以在 `.env` 中开启：
+
+```env
+CODEX_FULL_ACCESS=true
+```
+
+开启后，bridge 通过 CLI 新建或续接会话时会使用 Codex 的 `--dangerously-bypass-approvals-and-sandbox` 参数。这个选项等价于给 Discord 授权用户执行本机命令的能力，建议同时确认 `DISCORD_ALLOWED_USER_IDS` / `DISCORD_ALLOWED_ROLE_IDS` 只包含你信任的人，并保护好 Discord Bot token。使用 Desktop app-server 投递的回合仍由当前 Codex Desktop 线程自身的权限状态决定；如果想让所有 Discord 后续消息都走 CLI 权限策略，可以设置 `CODEX_TURN_DELIVERY=cli`。
 
 ## 验证和排错
 

@@ -13,6 +13,7 @@ describe("loadConfigFromEnv", () => {
     CODEX_BIN: "/Applications/Codex.app/Contents/Resources/codex",
     CODEX_HOME: "/Users/cxymds/.codex",
     CODEX_TURN_DELIVERY: "auto",
+    CODEX_FULL_ACCESS: "true",
     CODEX_APP_SERVER_SOCKET: "/Users/cxymds/.codex/app-server-control/app-server-control.sock",
     CODEX_APP_SERVER_AUTO_START: "true",
     BRIDGE_WORKSPACE_PATH: "/Users/cxymds/Documents/KAI",
@@ -29,8 +30,17 @@ describe("loadConfigFromEnv", () => {
     expect(config.workspacePath).toBe("/Users/cxymds/Documents/KAI");
     expect(config.notifyPort).toBe(43765);
     expect(config.codexTurnDelivery).toBe("auto");
+    expect(config.codexFullAccess).toBe(true);
     expect(config.codexAppServerSocket).toBe("/Users/cxymds/.codex/app-server-control/app-server-control.sock");
     expect(config.codexAppServerAutoStart).toBe(true);
+  });
+
+  it("leaves full access disabled by default", () => {
+    const { CODEX_FULL_ACCESS: _fullAccess, ...env } = validEnv;
+
+    const config = loadConfigFromEnv(env);
+
+    expect(config.codexFullAccess).toBe(false);
   });
 
   it("leaves app-server auto-start disabled by default", () => {
