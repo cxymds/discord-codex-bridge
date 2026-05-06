@@ -17,7 +17,7 @@ import { isAuthorized } from "./authz.js";
 import { chunkDiscordMessage, makeProjectThreadTitle } from "./format.js";
 import type { BridgeConfig } from "./config.js";
 import type { createCodexClient } from "./codex.js";
-import { discoverCodexProjects, formatProjectChoices, mergeProjectChoices } from "./projects.js";
+import { createProjectDiscoveryCache, discoverCodexProjects, formatProjectChoices, mergeProjectChoices } from "./projects.js";
 import type { SessionQueue } from "./queue.js";
 import type { createStore } from "./store.js";
 import type { ProjectChoice } from "./types.js";
@@ -52,6 +52,7 @@ interface HandlerDeps {
 export function createBridgeHandlers(deps: HandlerDeps) {
   const projectExists = deps.projectExists ?? existsSync;
   const discoverProjects = deps.discoverProjects ?? (() => discoverCodexProjects(deps.config.codexHome ?? ""));
+  const discoveredProjectCache = createProjectDiscoveryCache(discoverProjects);
 
   function assertAuthorized(userId: string, roleIds: string[]) {
     if (!isAuthorized({ userId, roleIds }, deps.config.allowedUserIds, deps.config.allowedRoleIds)) {
@@ -83,7 +84,7 @@ export function createBridgeHandlers(deps: HandlerDeps) {
         return resolve(registeredProject.path);
       }
 
-      const discoveredMatches = discoverProjects().filter((choice) => choice.name === trimmedProject);
+      const discoveredMatches = discoveredProjectCache.refresh().filter((choice) => choice.name === trimmedProject);
       if (discoveredMatches.length === 1) {
         return resolve(discoveredMatches[0].path);
       }
@@ -161,7 +162,7 @@ export function createBridgeHandlers(deps: HandlerDeps) {
 
     async handleProjectAutocomplete(input: { query: string }) {
       const registeredChoices: ProjectChoice[] = deps.store.listProjects().map((project) => ({ name: project.name, path: project.path, source: "registered" }));
-      return formatProjectChoices(mergeProjectChoices(registeredChoices, discoverProjects()), input.query);
+      return formatProjectChoices(mergeProjectChoices(registeredChoices, discoveredProjectCache.get()), input.query);
     },
 
     async handleThreadMessage(input: { userId: string; roleIds: string[]; threadId: string; content: string }) {

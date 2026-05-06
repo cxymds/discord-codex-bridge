@@ -116,6 +116,7 @@ describe("createBridgeHandlers", () => {
     const createThread = vi.fn(async () => ({ id: "thread1", name: "Hello" }));
     const store = {
       findProjectByName: vi.fn(() => null),
+      listProjects: vi.fn(() => []),
       createSession: vi.fn((input) => ({ id: "bridge1", ...input, status: "active", createdAt: "", updatedAt: "", lastTurnAt: null, closedAt: null })),
       setCodexSessionId: vi.fn(),
       updateSessionStatus: vi.fn(),
@@ -136,6 +137,64 @@ describe("createBridgeHandlers", () => {
     await handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "rustfs", prompt: "Hello" });
 
     expect(codex.startInProject).toHaveBeenCalledWith("/Users/cxymds/Documents/KAI/rustfs", "Hello");
+  });
+
+  it("serves autocomplete from cached discovered projects between refreshes", async () => {
+    const discoverProjects = vi
+      .fn()
+      .mockReturnValueOnce([{ name: "rustfs", path: "/Users/cxymds/Documents/KAI/rustfs", source: "codex" as const }])
+      .mockReturnValueOnce([{ name: "console", path: "/Users/cxymds/Documents/KAI/console", source: "codex" as const }]);
+    const handlers = createBridgeHandlers({
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: "/workspace" },
+      store: { listProjects: vi.fn(() => []) } as never,
+      codex: {} as never,
+      queue: {} as never,
+      discord: { createThread: vi.fn(), postMessage: vi.fn() },
+      discoverProjects
+    });
+
+    await expect(handlers.handleProjectAutocomplete({ query: "" })).resolves.toEqual([
+      { name: "rustfs  /Users/cxymds/Documents/KAI/rustfs", value: "rustfs" }
+    ]);
+    await expect(handlers.handleProjectAutocomplete({ query: "" })).resolves.toEqual([
+      { name: "rustfs  /Users/cxymds/Documents/KAI/rustfs", value: "rustfs" }
+    ]);
+    expect(discoverProjects).toHaveBeenCalledTimes(1);
+  });
+
+  it("refreshes discovered projects when resolving a submitted project name", async () => {
+    const createThread = vi.fn(async () => ({ id: "thread1", name: "Hello" }));
+    const store = {
+      findProjectByName: vi.fn(() => null),
+      listProjects: vi.fn(() => []),
+      createSession: vi.fn((input) => ({ id: "bridge1", ...input, status: "active", createdAt: "", updatedAt: "", lastTurnAt: null, closedAt: null })),
+      setCodexSessionId: vi.fn(),
+      updateSessionStatus: vi.fn(),
+      markTurn: vi.fn(),
+      recordEvent: vi.fn()
+    };
+    const codex = { startInProject: vi.fn(async () => ({ sessionId: "codex1", finalMessage: "done", rawEvents: [] })) };
+    const discoverProjects = vi
+      .fn()
+      .mockReturnValueOnce([{ name: "rustfs", path: "/Users/cxymds/Documents/KAI/rustfs", source: "codex" as const }])
+      .mockReturnValueOnce([{ name: "console", path: "/Users/cxymds/Documents/KAI/console", source: "codex" as const }]);
+    const handlers = createBridgeHandlers({
+      config: { discordGuildId: "guild", discordChannelId: "channel", allowedUserIds: ["u1"], allowedRoleIds: [], workspacePath: "/workspace" },
+      store: store as never,
+      codex: codex as never,
+      queue: { enqueue: vi.fn((_id, work) => work()), pendingCount: vi.fn(() => 0) } as never,
+      discord: { createThread, postMessage: vi.fn() },
+      projectExists: vi.fn(() => true),
+      discoverProjects
+    });
+
+    await expect(handlers.handleProjectAutocomplete({ query: "" })).resolves.toEqual([
+      { name: "rustfs  /Users/cxymds/Documents/KAI/rustfs", value: "rustfs" }
+    ]);
+    await handlers.handleNewCommand({ userId: "u1", roleIds: [], project: "console", prompt: "Hello" });
+
+    expect(codex.startInProject).toHaveBeenCalledWith("/Users/cxymds/Documents/KAI/console", "Hello");
+    expect(discoverProjects).toHaveBeenCalledTimes(2);
   });
 
   it("returns after creating the Discord thread while the first Codex turn runs in the background", async () => {

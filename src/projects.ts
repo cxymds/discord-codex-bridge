@@ -3,6 +3,16 @@ import { basename, join } from "node:path";
 import { readCodexSessionProject } from "./sessionSync.js";
 import type { ProjectChoice } from "./types.js";
 
+export interface ProjectDiscoveryCache {
+  get(): ProjectChoice[];
+  refresh(): ProjectChoice[];
+}
+
+interface ProjectDiscoveryCacheOptions {
+  refreshIntervalMs?: number;
+  now?: () => number;
+}
+
 export function discoverCodexProjects(codexHome: string): ProjectChoice[] {
   const sessionsDir = join(codexHome, "sessions");
   if (!existsSync(sessionsDir)) {
@@ -32,6 +42,33 @@ export function discoverCodexProjects(codexHome: string): ProjectChoice[] {
   }
 
   return [...projectsByPath.values()].sort((left, right) => left.name.localeCompare(right.name) || left.path.localeCompare(right.path));
+}
+
+export function createProjectDiscoveryCache(discover: () => ProjectChoice[], options: ProjectDiscoveryCacheOptions = {}): ProjectDiscoveryCache {
+  const refreshIntervalMs = options.refreshIntervalMs ?? 30_000;
+  const now = options.now ?? Date.now;
+  let choices: ProjectChoice[] = [];
+  let lastRefreshAt = Number.NEGATIVE_INFINITY;
+
+  function refresh(): ProjectChoice[] {
+    try {
+      choices = discover();
+      lastRefreshAt = now();
+    } catch {
+      lastRefreshAt = now();
+    }
+    return choices;
+  }
+
+  return {
+    get() {
+      if (now() - lastRefreshAt >= refreshIntervalMs) {
+        return refresh();
+      }
+      return choices;
+    },
+    refresh
+  };
 }
 
 export function mergeProjectChoices(registered: ProjectChoice[], discovered: ProjectChoice[]): ProjectChoice[] {
