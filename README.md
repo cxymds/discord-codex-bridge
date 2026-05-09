@@ -184,6 +184,64 @@ npm start
 Discord-Codex bridge running. Notify endpoint: http://127.0.0.1:43765/notify/turn-ended
 ```
 
+## 安装为 macOS 后台服务
+
+如果希望 bridge 像 Clash 后台核心一样开机自启、崩溃后自动拉起，可以安装为当前 macOS 用户的 launchd 服务：
+
+```bash
+npm run service:install
+```
+
+安装脚本会：
+
+- 必要时先执行 `npm run build`
+- 写入 `~/Library/LaunchAgents/com.local.discord-codex-bridge.plist`
+- 设置工作目录为当前仓库
+- 使用生产入口 `dist/src/index.js`
+- 设置 `RunAtLoad=true` 和 `KeepAlive=true`
+
+默认不会把 stdout/stderr 写入日志文件。如果需要记录日志，用 `LOG_TO_FILES=true` 重新安装服务：
+
+```bash
+LOG_TO_FILES=true npm run service:install
+```
+
+开启后会写入：
+
+- `logs/bridge.out.log`
+- `logs/bridge.err.log`
+
+服务管理命令：
+
+```bash
+npm run service:status
+npm run service:restart
+npm run service:stop
+npm run service:start
+npm run service:uninstall
+```
+
+开启文件日志后查看日志：
+
+```bash
+tail -f logs/bridge.out.log
+tail -f logs/bridge.err.log
+```
+
+如果 launchd 使用的 Node 路径需要手动指定，可以在安装时设置 `NODE_BIN`：
+
+```bash
+NODE_BIN=/opt/homebrew/bin/node npm run service:install
+```
+
+更新代码后，重新构建并重启服务：
+
+```bash
+npm install
+npm run build
+npm run service:restart
+```
+
 第一次启动时服务会注册 Discord guild slash command。然后在配置的 Discord 频道中运行：
 
 ```text

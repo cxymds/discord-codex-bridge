@@ -7,6 +7,12 @@
     "build": "tsc -p tsconfig.json",
     "dev": "tsx watch src/index.ts",
     "start": "node dist/src/index.js",
+    "service:install": "node scripts/launchd-service.mjs install",
+    "service:uninstall": "node scripts/launchd-service.mjs uninstall",
+    "service:start": "node scripts/launchd-service.mjs start",
+    "service:stop": "node scripts/launchd-service.mjs stop",
+    "service:restart": "node scripts/launchd-service.mjs restart",
+    "service:status": "node scripts/launchd-service.mjs status",
     "test": "vitest run",
     "test:watch": "vitest",
     "notify": "node scripts/codex-discord-notify.mjs"
