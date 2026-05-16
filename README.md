@@ -1,56 +1,86 @@
 # Discord Codex Bridge
 
-把 Discord 频道和本机 Codex CLI 会话连接起来的桥接服务。启动后，Bot 会在指定 Discord 频道注册 `/codex` 指令：
+Discord Codex Bridge 是一个本机桥接服务，用来把 Discord 线程接到本机 Codex CLI / Codex Desktop 会话。启动后，授权用户可以在指定 Discord 频道里用 `/codex` 创建 Codex 会话，然后直接在线程里继续对话。
 
-- `/codex new project:<本机项目路径> prompt:<初始任务>`：创建一个 Discord 线程，并在对应项目目录中启动 Codex。
-- `/codex project add name:<名称> path:<本机项目路径>`：登记项目名称，后续 `/codex new` 可以直接选择或输入该名称。
-- `/codex project list`：查看已登记项目。
-- `/codex project remove name:<名称>`：删除已登记项目。
-- 在线程中继续发消息：续接同一个 Codex 会话。
-- `/codex status`：查看当前线程映射的桥接会话状态。
-- `/codex done`：让 Codex 总结并关闭当前线程会话。
+主要能力：
 
-服务还会启动一个本地 notify endpoint，用来接收 Codex `turn-ended` 通知并把结果同步回 Discord。
+- 在 Discord 频道中用 `/codex new` 为指定本机项目创建 Codex 会话。
+- 每个 Codex 会话对应一个 Discord 线程，后续线程消息会续接同一个 Codex 会话。
+- 支持项目别名、项目 autocomplete、以及从 Codex 历史会话中发现项目。
+- 支持把 Codex `turn-ended` notify 同步回 Discord。
+- 支持 Codex Desktop app-server 投递，失败时可自动回退到 `codex exec resume`。
+- 支持安装为 macOS launchd 用户后台服务。
 
 ## Requirements
 
-- macOS 上已安装 Codex app，默认 CLI 路径为 `/Applications/Codex.app/Contents/Resources/codex`
+- macOS
 - Node.js 22+
-- 一个 Discord Server，并且你有创建/邀请 Bot 的权限
+- 已安装并登录 Codex app，默认 CLI 路径为 `/Applications/Codex.app/Contents/Resources/codex`
+- 一个 Discord Server，并且你有创建应用、邀请 Bot、复制 Server / Channel / User / Role ID 的权限
 
-## Install
+## Quick Start
 
 ```bash
 npm install
 cp .env.example .env
 ```
 
-然后按下面的说明填写 `.env`。`.env` 已经被 `.gitignore` 排除，不要把 Bot token 或本机路径提交到仓库。
+编辑 `.env`，至少填写：
 
-## 获取 Discord 环境信息
+```env
+DISCORD_TOKEN=
+DISCORD_APPLICATION_ID=
+DISCORD_GUILD_ID=
+DISCORD_CHANNEL_ID=
+DISCORD_ALLOWED_USER_IDS=
+DISCORD_ALLOWED_ROLE_IDS=
+BRIDGE_WORKSPACE_PATH=/Users/你的用户名/Documents
+```
 
-### 1. 创建 Discord Application 和 Bot
+`DISCORD_ALLOWED_USER_IDS` 和 `DISCORD_ALLOWED_ROLE_IDS` 至少填写一个。多个 ID 用英文逗号分隔。
+
+开发模式启动：
+
+```bash
+npm run dev
+```
+
+生产模式启动：
+
+```bash
+npm run build
+npm start
+```
+
+启动成功后会看到类似输出：
+
+```text
+Discord-Codex bridge running. Notify endpoint: http://127.0.0.1:43765/notify/turn-ended
+```
+
+然后在配置的 Discord 频道中运行：
+
+```text
+/codex new project:/Users/你的用户名/Documents/your-project prompt:你好，确认桥接可用
+```
+
+如果设置了 `BRIDGE_WORKSPACE_PATH`，也可以使用相对项目目录：
+
+```text
+/codex new project:your-project prompt:你好，确认桥接可用
+```
+
+## Discord Bot Setup
+
+### 1. 创建 Application 和 Bot
 
 1. 打开 [Discord Developer Portal](https://discord.com/developers/applications)。
 2. 点击 `New Application` 创建应用。
-3. 在应用的 `General Information` 页面复制 `Application ID`，填入：
+3. 在 `General Information` 页面复制 `Application ID`，填入 `DISCORD_APPLICATION_ID`。
+4. 进入 `Bot` 页面，创建 Bot 并复制 `Token`，填入 `DISCORD_TOKEN`。
+5. 在 `Bot` 页面的 `Privileged Gateway Intents` 中开启 `Message Content Intent`。
 
-```env
-DISCORD_APPLICATION_ID=你的 Application ID
-```
-
-4. 进入 `Bot` 页面，创建 Bot 并复制 `Token`，填入：
-
-```env
-DISCORD_TOKEN=你的 Bot Token
-```
-
-5. 在 `Bot` 页面的 `Privileged Gateway Intents` 中开启 `Message Content Intent`。本项目需要读取 Discord 线程里的普通消息内容，未开启时线程续聊会收不到正文。
-
-Discord 官方文档可参考：
-
-- [Gateway Intents](https://docs.discord.com/developers/events/gateway#gateway-intents)
-- [Privileged Intents](https://support-dev.discord.com/hc/en-us/articles/6207308062871-What-are-Privileged-Intents)
+本项目需要读取 Discord 线程里的普通消息内容。未开启 `Message Content Intent` 时，线程续聊会收不到正文。
 
 ### 2. 邀请 Bot 到服务器
 
@@ -61,7 +91,7 @@ Discord 官方文档可参考：
 
 打开生成的 URL，把 Bot 邀请到目标服务器。
 
-### 3. 获取 Guild、Channel、User、Role ID
+### 3. 获取 Discord ID
 
 先在 Discord 客户端开启开发者模式：
 
@@ -75,18 +105,38 @@ Discord 官方文档可参考：
 - `DISCORD_ALLOWED_USER_IDS`：右键允许使用 Bot 的用户，选择 `Copy User ID`
 - `DISCORD_ALLOWED_ROLE_IDS`：右键服务器角色，选择 `Copy Role ID`
 
-`DISCORD_ALLOWED_USER_IDS` 和 `DISCORD_ALLOWED_ROLE_IDS` 至少填写一个。多个 ID 用英文逗号分隔：
+## Slash Commands
 
-```env
-DISCORD_GUILD_ID=123456789012345678
-DISCORD_CHANNEL_ID=123456789012345678
-DISCORD_ALLOWED_USER_IDS=111111111111111111,222222222222222222
-DISCORD_ALLOWED_ROLE_IDS=
+- `/codex new project:<项目名或路径> prompt:<初始任务>`：创建一个 Discord 线程，并在对应项目目录中启动 Codex。
+- `/codex project add name:<名称> path:<本机项目路径>`：登记项目名称，后续 `/codex new` 可以直接选择或输入该名称。
+- `/codex project list`：查看已登记项目。
+- `/codex project remove name:<名称>`：删除已登记项目。
+- `/codex status`：查看当前线程映射的 bridge 会话状态。
+- `/codex done`：让 Codex 总结并关闭当前线程会话。
+- 在线程中继续发消息：续接同一个 Codex 会话。
+
+`/codex new` 只能在 `.env` 中配置的 `DISCORD_CHANNEL_ID` 频道中使用。`/codex status`、`/codex done` 和线程续聊需要在对应 Codex 线程里使用。
+
+## Project Resolution
+
+`/codex new project:<value>` 会按以下顺序解析项目：
+
+1. 已登记的项目名称。
+2. Codex 历史会话中唯一同名的项目。
+3. 绝对路径。
+4. `BRIDGE_WORKSPACE_PATH` 下的相对路径。
+5. 如果没有设置 `BRIDGE_WORKSPACE_PATH`，相对路径基于 bridge 进程当前目录解析。
+
+解析完成后，bridge 会先检查项目路径是否存在，再创建 Discord 线程。
+
+项目别名示例：
+
+```text
+/codex project add name:rustfs path:/Users/你的用户名/Documents/KAI/rustfs
+/codex new project:rustfs prompt:检查测试失败原因
 ```
 
-如果你使用角色授权，确认对应用户在服务器里拥有该角色。
-
-## 设置 Codex 和 Bridge 环境信息
+## Configuration
 
 `.env.example` 包含全部可配置项：
 
@@ -104,14 +154,12 @@ CODEX_TURN_DELIVERY=auto
 CODEX_FULL_ACCESS=false
 CODEX_APP_SERVER_SOCKET=/Users/cxymds/.codex/app-server-control/app-server-control.sock
 CODEX_APP_SERVER_AUTO_START=false
-BRIDGE_WORKSPACE_PATH=/Users/你的用户名/Documents
+BRIDGE_WORKSPACE_PATH=/Users/cxymds/Documents
 BRIDGE_DB_PATH=./data/bridge.sqlite
 BRIDGE_NOTIFY_HOST=127.0.0.1
 BRIDGE_NOTIFY_PORT=43765
 BRIDGE_PUBLIC_BASE_URL=http://127.0.0.1:43765
 ```
-
-变量说明：
 
 | 变量 | 必填 | 说明 |
 | --- | --- | --- |
@@ -124,30 +172,19 @@ BRIDGE_PUBLIC_BASE_URL=http://127.0.0.1:43765
 | `DISCORD_PROXY_URL` | 否 | 访问 Discord API 需要代理时填写，例如 `http://127.0.0.1:7897`。 |
 | `CODEX_BIN` | 否 | Codex CLI 路径，默认 `/Applications/Codex.app/Contents/Resources/codex`。 |
 | `CODEX_HOME` | 否 | Codex 配置和会话目录，默认 `~/.codex`。 |
-| `CODEX_TURN_DELIVERY` | 否 | Discord 线程回复的投递方式，`auto` 会优先写入 Codex Desktop UI，失败时回退到 `codex exec resume`；`desktop` 严格要求 Desktop app-server；`cli` 只使用旧的 CLI resume。默认 `auto`。 |
-| `CODEX_FULL_ACCESS` | 否 | 设为 `true` 时，bridge 启动的 Codex CLI 会话会附加 `--dangerously-bypass-approvals-and-sandbox`，跳过审批和沙箱。只应在 Discord Bot 仅允许可信用户使用时开启。默认 `false`。 |
+| `CODEX_TURN_DELIVERY` | 否 | Discord 线程回复投递方式。`auto` 优先写入 Codex Desktop UI，失败时回退到 CLI；`desktop` 严格要求 Desktop app-server；`cli` 只使用 CLI resume。默认 `auto`。 |
+| `CODEX_FULL_ACCESS` | 否 | 设为 `true` 时，bridge 启动的 Codex CLI 会话会附加 `--dangerously-bypass-approvals-and-sandbox`。默认 `false`。 |
 | `CODEX_APP_SERVER_SOCKET` | 否 | Codex Desktop app-server control socket 路径，默认 `CODEX_HOME/app-server-control/app-server-control.sock`。 |
-| `CODEX_APP_SERVER_AUTO_START` | 否 | 是否由 bridge 启动本机 Codex app-server control socket。设为 `true` 时，`CODEX_TURN_DELIVERY=auto` 或 `desktop` 且 socket 不存在会自动运行 `codex app-server --listen unix://...`。默认 `false`。 |
-| `BRIDGE_WORKSPACE_PATH` | 否 | Discord 中 `/codex new project:<项目名>` 的相对路径根目录。例如设为 `/Users/你/Documents/KAI` 后，`project:rustfs` 会解析为 `/Users/你/Documents/KAI/rustfs`。不设置时相对路径会基于 bridge 进程当前目录解析。 |
+| `CODEX_APP_SERVER_AUTO_START` | 否 | 是否由 bridge 启动本机 Codex app-server control socket。默认 `false`。 |
+| `BRIDGE_WORKSPACE_PATH` | 否 | 相对项目名的解析根目录。例如设为 `/Users/你/Documents/KAI` 后，`project:rustfs` 会解析为 `/Users/你/Documents/KAI/rustfs`。 |
 | `BRIDGE_DB_PATH` | 否 | SQLite 状态库路径，默认 `./data/bridge.sqlite`。 |
 | `BRIDGE_NOTIFY_HOST` | 否 | 本地通知服务监听地址，默认 `127.0.0.1`。 |
 | `BRIDGE_NOTIFY_PORT` | 否 | 本地通知服务端口，默认 `43765`。 |
 | `BRIDGE_PUBLIC_BASE_URL` | 否 | 对外展示的 bridge base URL；省略时根据 host 和 port 自动生成。 |
 
-如果不确定 `CODEX_BIN` 是否正确，可以运行：
+`.env` 已经被 `.gitignore` 排除，不要把 Bot token 或本机路径提交到仓库。
 
-```bash
-ls -l /Applications/Codex.app/Contents/Resources/codex
-/Applications/Codex.app/Contents/Resources/codex --help
-```
-
-如果你使用自定义 Codex home，确认该目录中有 Codex 的配置和会话数据：
-
-```bash
-ls -la ~/.codex
-```
-
-## 配置 Codex Notify Hook
+## Codex Notify Hook
 
 为了让本机 Codex turn 结束后主动通知 bridge，把 `~/.codex/config.toml` 里的 `notify` 指向本仓库脚本：
 
@@ -163,30 +200,42 @@ BRIDGE_NOTIFY_URL=http://127.0.0.1:43765/notify/turn-ended node scripts/codex-di
 
 修改 `~/.codex/config.toml` 前建议备份原来的 `notify` 配置。当前脚本会先把通知 POST 到 bridge，再尝试保留已有的本机 Computer Use 通知行为。
 
-## Run
+## Codex Desktop Delivery
 
-开发模式：
+默认 `CODEX_TURN_DELIVERY=auto`。线程中的后续 Discord 消息会先尝试通过 Codex Desktop app-server 的 `thread/resume` + `turn/start` 投递到 Desktop UI。这样同一个会话打开在 Codex Desktop 中时，Discord 消息会作为新的用户输入进入界面并启动请求。
 
-```bash
-npm run dev
+如果本机 Codex Desktop 没有开放 app-server control socket，`auto` 模式会回退到 `codex exec resume`，Discord 线程仍能收到最终回复。
+
+相关配置：
+
+```env
+CODEX_TURN_DELIVERY=auto
+CODEX_APP_SERVER_AUTO_START=false
 ```
 
-生产构建：
+- 想严格要求 Desktop UI 同步：设为 `CODEX_TURN_DELIVERY=desktop`。
+- 想只走 CLI resume：设为 `CODEX_TURN_DELIVERY=cli`。
+- 想让 bridge 启动时自动创建本机 control socket：设为 `CODEX_APP_SERVER_AUTO_START=true`。
 
-```bash
-npm run build
-npm start
+## Full Access Mode
+
+如果 Discord 发起的 Codex CLI 会话在 `git push`、跨目录写入或需要网络/系统权限的命令上报权限不足，可以在 `.env` 中开启：
+
+```env
+CODEX_FULL_ACCESS=true
 ```
 
-启动成功后，终端会看到类似输出：
+开启后，bridge 通过 CLI 新建或续接会话时会使用 Codex 的 `--dangerously-bypass-approvals-and-sandbox` 参数。这个选项等价于给 Discord 授权用户执行本机命令的能力，建议同时确认 `DISCORD_ALLOWED_USER_IDS` / `DISCORD_ALLOWED_ROLE_IDS` 只包含你信任的人，并保护好 Discord Bot token。
 
-```text
-Discord-Codex bridge running. Notify endpoint: http://127.0.0.1:43765/notify/turn-ended
+使用 Desktop app-server 投递的回合仍由当前 Codex Desktop 线程自身的权限状态决定。如果想让所有 Discord 后续消息都走 CLI 权限策略，可以设置：
+
+```env
+CODEX_TURN_DELIVERY=cli
 ```
 
-## 安装为 macOS 后台服务
+## macOS Background Service
 
-如果希望 bridge 像 Clash 后台核心一样开机自启、崩溃后自动拉起，可以安装为当前 macOS 用户的 launchd 服务：
+安装为当前 macOS 用户的 launchd 服务：
 
 ```bash
 npm run service:install
@@ -221,13 +270,6 @@ npm run service:start
 npm run service:uninstall
 ```
 
-开启文件日志后查看日志：
-
-```bash
-tail -f logs/bridge.out.log
-tail -f logs/bridge.err.log
-```
-
 如果 launchd 使用的 Node 路径需要手动指定，可以在安装时设置 `NODE_BIN`：
 
 ```bash
@@ -242,41 +284,13 @@ npm run build
 npm run service:restart
 ```
 
-第一次启动时服务会注册 Discord guild slash command。然后在配置的 Discord 频道中运行：
+## Development
 
-```text
-/codex new project:/Users/你的用户名/Documents/your-project prompt:你好，确认桥接可用
-```
-
-也可以先登记项目名称：
-
-```text
-/codex project add name:rustfs path:/Users/你的用户名/Documents/KAI/rustfs
-```
-
-登记后，`/codex new` 的 `project` 输入框会出现 autocomplete 候选，可以选择 `rustfs`。如果已经设置 `BRIDGE_WORKSPACE_PATH`，也可以只写项目目录名：
-
-```text
-/codex new project:your-project prompt:你好，确认桥接可用
-```
-
-Bot 会按以下顺序解析 `project`：已登记项目名称、Codex 历史会话中唯一同名项目、绝对路径、`BRIDGE_WORKSPACE_PATH` 下的相对路径。解析完成后会先检查项目路径是否存在，再创建线程。Codex 的回复会出现在该线程中。之后直接在线程内发消息即可继续同一个 Codex 会话。
-
-默认情况下，Discord 线程内的后续消息会先尝试通过 Codex Desktop app-server 的 `thread/resume` + `turn/start` 投递到 Desktop UI。这样同一个会话打开在 Codex Desktop 中时，Discord 消息会作为新的用户输入进入界面并启动请求。如果本机 Codex Desktop 没有开放 app-server control socket，bridge 会自动回退到旧的 `codex exec resume`，保证 Discord 线程仍能收到最终回复。若希望严格要求 Desktop UI 同步，可以设置 `CODEX_TURN_DELIVERY=desktop`。如果希望 bridge 启动时自动创建本机 control socket，可以同时设置 `CODEX_APP_SERVER_AUTO_START=true`；bridge 会复用已存在的 socket，不会重复启动 app-server。
-
-如果 Discord 发起的 Codex CLI 会话在 `git push`、跨目录写入或需要网络/系统权限的命令上报权限不足，可以在 `.env` 中开启：
-
-```env
-CODEX_FULL_ACCESS=true
-```
-
-开启后，bridge 通过 CLI 新建或续接会话时会使用 Codex 的 `--dangerously-bypass-approvals-and-sandbox` 参数。这个选项等价于给 Discord 授权用户执行本机命令的能力，建议同时确认 `DISCORD_ALLOWED_USER_IDS` / `DISCORD_ALLOWED_ROLE_IDS` 只包含你信任的人，并保护好 Discord Bot token。使用 Desktop app-server 投递的回合仍由当前 Codex Desktop 线程自身的权限状态决定；如果想让所有 Discord 后续消息都走 CLI 权限策略，可以设置 `CODEX_TURN_DELIVERY=cli`。
-
-## 验证和排错
-
-运行测试：
+常用命令：
 
 ```bash
+npm run dev
+npm run build
 npm test
 ```
 
@@ -287,19 +301,14 @@ printf '{"session_id":"manual-check","final_message":"notify ok"}' \
   | node scripts/codex-discord-notify.mjs turn-ended
 ```
 
-如果 Discord 连接超时，可以先验证代理：
+检查 Codex CLI 路径：
 
 ```bash
-curl -I --proxy http://127.0.0.1:7897 --connect-timeout 10 https://discord.com/api/v10/gateway
+ls -l /Applications/Codex.app/Contents/Resources/codex
+/Applications/Codex.app/Contents/Resources/codex --help
 ```
 
-然后在 `.env` 中设置：
-
-```env
-DISCORD_PROXY_URL=http://127.0.0.1:7897
-```
-
-常见问题：
+## Troubleshooting
 
 - `At least one Discord allowed user id or role id is required`：`DISCORD_ALLOWED_USER_IDS` 和 `DISCORD_ALLOWED_ROLE_IDS` 都为空，至少填一个。
 - `/codex new` 不出现：确认 Bot 邀请链接包含 `applications.commands` scope，且服务已成功启动并注册 guild command。
@@ -309,4 +318,11 @@ DISCORD_PROXY_URL=http://127.0.0.1:7897
 - `Codex exited with code ...`：确认 `CODEX_BIN` 可执行，`project` 路径存在，并且 Codex app 已完成登录/授权。
 - `Failed to start Codex command ... in ...`：通常表示 `CODEX_BIN` 不存在、不可执行，或后面的 `in <cwd>` 项目目录不存在/不可访问。
 - `Codex Desktop app-server proxy failed`：严格 Desktop UI 投递模式无法连接 app-server control socket。可以设置 `CODEX_APP_SERVER_AUTO_START=true` 让 bridge 启动本机 control socket；默认 `auto` 模式会自动回退到 CLI resume。
+- Discord 连接超时：如果终端访问 Discord 需要代理，在 `.env` 中设置 `DISCORD_PROXY_URL=http://127.0.0.1:7897`。
 - notify 不回传：确认 bridge 正在运行，`BRIDGE_NOTIFY_PORT` 和 `~/.codex/config.toml` 中的 notify endpoint 一致。
+
+代理可用性可以这样检查：
+
+```bash
+curl -I --proxy http://127.0.0.1:7897 --connect-timeout 10 https://discord.com/api/v10/gateway
+```
